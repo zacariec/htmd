@@ -1,0 +1,26 @@
+{
+  "name": "htmd",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Streamable HTML+Markdown wire format for AI output",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' run build",
+    "dev": "pnpm -r --parallel --filter './packages/*' run dev",
+    "typecheck": "tsc -b",
+    "test": "pnpm -r --filter './packages/*' run test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "example": "pnpm --filter ./examples/minimal-consumer run dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
