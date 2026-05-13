@@ -1,5 +1,6 @@
-import { tokenize } from './tokenizer.js';
-import type { ElementOpenToken, Token } from './tokenizer.js';
+import { TokenCursor } from './token-cursor.js';
+import { Tokenizer } from './tokenizer.js';
+import type { ElementOpenToken } from './tokenizer.js';
 import type {
   Diagnostic,
   Document,
@@ -18,124 +19,129 @@ import type {
  *   and recursively-parsed children.
  * - Plain HTML tags (no hyphen) are not recognised by the tokenizer; they
  *   remain inside markdown spans and the markdown layer escapes them.
+ *
+ * Singleton: `Parser` holds no per-source state. Each call to `parse(source)`
+ * constructs a fresh `TokenCursor` and walks it.
  */
-export function parse(source: string): ParseResult {
-  const tokens = tokenize(source);
-  const diagnostics: Diagnostic[] = [];
-  const cursor = { index: 0 };
+export class Parser {
+  private static instance: Parser | undefined;
 
-  const nodes = parseNodes(source, tokens, cursor, undefined, diagnostics);
+  private constructor() {}
 
-  return {
-    document: { nodes, source },
-    diagnostics,
-  };
-}
-
-function parseNodes(
-  source: string,
-  tokens: ReadonlyArray<Token>,
-  cursor: { index: number },
-  closingTag: string | undefined,
-  diagnostics: Diagnostic[],
-): ReadonlyArray<Node> {
-  const nodes: Node[] = [];
-
-  while (cursor.index < tokens.length) {
-    const token = tokens[cursor.index];
-    if (token === undefined) {
-      break;
+  public static getInstance(): Parser {
+    if (Parser.instance === undefined) {
+      Parser.instance = new Parser();
     }
+    return Parser.instance;
+  }
 
-    if (token.kind === 'markdown') {
-      cursor.index += 1;
-      if (token.value.length === 0) {
+  public parse(source: string): ParseResult {
+    const tokens = Tokenizer.getInstance().tokenize(source);
+    const cursor = new TokenCursor(tokens);
+    const diagnostics: Diagnostic[] = [];
+    const nodes = this.parseNodes(source, cursor, undefined, diagnostics);
+
+    return {
+      document: { nodes, source },
+      diagnostics,
+    };
+  }
+
+  public emptyDocument(): Document {
+    return { nodes: [], source: '' };
+  }
+
+  private parseNodes(
+    source: string,
+    cursor: TokenCursor,
+    closingTag: string | undefined,
+    diagnostics: Diagnostic[],
+  ): readonly Node[] {
+    const nodes: Node[] = [];
+
+    while (!cursor.eof()) {
+      const token = cursor.peek();
+      if (token === undefined) {
+        break;
+      }
+
+      if (token.kind === 'markdown') {
+        cursor.advance();
+        if (token.value.length === 0) {
+          continue;
+        }
+        const block: MarkdownBlock = {
+          type: 'markdown',
+          source: token.value,
+          start: token.start,
+          end: token.end,
+        };
+        nodes.push(block);
         continue;
       }
-      const block: MarkdownBlock = {
-        type: 'markdown',
-        source: token.value,
-        start: token.start,
-        end: token.end,
-      };
-      nodes.push(block);
-      continue;
+
+      if (token.kind === 'element-close') {
+        if (closingTag !== undefined && token.tag === closingTag) {
+          cursor.advance();
+          return nodes;
+        }
+        diagnostics.push({
+          severity: 'warning',
+          message: `unexpected closing tag </${token.tag}>`,
+          start: token.start,
+          end: token.end,
+        });
+        cursor.advance();
+        continue;
+      }
+
+      cursor.advance();
+      nodes.push(this.buildElementNode(source, token, cursor, diagnostics));
     }
 
-    if (token.kind === 'element-close') {
-      if (closingTag !== undefined && token.tag === closingTag) {
-        cursor.index += 1;
-        return nodes;
-      }
+    if (closingTag !== undefined) {
       diagnostics.push({
         severity: 'warning',
-        message: `unexpected closing tag </${token.tag}>`,
-        start: token.start,
-        end: token.end,
+        message: `missing closing tag </${closingTag}>`,
+        start: source.length,
+        end: source.length,
       });
-      cursor.index += 1;
-      continue;
     }
 
-    cursor.index += 1;
-    nodes.push(buildElementNode(source, token, tokens, cursor, diagnostics));
+    return nodes;
   }
 
-  if (closingTag !== undefined) {
-    diagnostics.push({
-      severity: 'warning',
-      message: `missing closing tag </${closingTag}>`,
-      start: source.length,
-      end: source.length,
-    });
-  }
+  private buildElementNode(
+    source: string,
+    openToken: ElementOpenToken,
+    cursor: TokenCursor,
+    diagnostics: Diagnostic[],
+  ): ElementBlock {
+    if (openToken.selfClosing) {
+      return {
+        type: 'element',
+        tag: openToken.tag,
+        attrs: openToken.attrs,
+        children: [],
+        selfClosing: true,
+        source: source.slice(openToken.start, openToken.end),
+        start: openToken.start,
+        end: openToken.end,
+      };
+    }
 
-  return nodes;
-}
+    const children = this.parseNodes(source, cursor, openToken.tag, diagnostics);
+    const closingEnd = cursor.lastConsumedEnd();
 
-function buildElementNode(
-  source: string,
-  openToken: ElementOpenToken,
-  tokens: ReadonlyArray<Token>,
-  cursor: { index: number },
-  diagnostics: Diagnostic[],
-): ElementBlock {
-  if (openToken.selfClosing) {
     return {
       type: 'element',
       tag: openToken.tag,
       attrs: openToken.attrs,
-      children: [],
-      selfClosing: true,
-      source: source.slice(openToken.start, openToken.end),
+      children,
+      selfClosing: false,
+      source: source.slice(openToken.start, closingEnd),
       start: openToken.start,
-      end: openToken.end,
+      end: closingEnd,
     };
   }
-
-  const children = parseNodes(source, tokens, cursor, openToken.tag, diagnostics);
-  const closingTokenEnd = closingEndForChildren(tokens, cursor.index);
-
-  return {
-    type: 'element',
-    tag: openToken.tag,
-    attrs: openToken.attrs,
-    children,
-    selfClosing: false,
-    source: source.slice(openToken.start, closingTokenEnd),
-    start: openToken.start,
-    end: closingTokenEnd,
-  };
-}
-
-function closingEndForChildren(tokens: ReadonlyArray<Token>, indexAfterClose: number): number {
-  const prior = tokens[indexAfterClose - 1];
-  if (prior === undefined) {
-    return 0;
-  }
-  return prior.end;
-}
-
-export function emptyDocument(): Document {
-  return { nodes: [], source: '' };
 }

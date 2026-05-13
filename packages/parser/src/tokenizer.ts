@@ -1,14 +1,29 @@
+import {
+  isAttrNameChar,
+  isAttrNameStart,
+  isTagNameChar,
+  isTagNameStart,
+  isWhitespace,
+} from './char-predicates.js';
+import { Cursor } from './cursor.js';
 import { isCustomElementTag } from './is-custom-element-tag.js';
 
 /**
- * Tokenizer — finds top-level custom-element openings in a `.htmd` source
- * string. Yields tokens for the surrounding parser to assemble into nodes.
+ * Tokenizer — finds top-level custom-element openings in `.htmd` source.
  *
- * This is intentionally a flat scan, not a full HTML parser. It locates
- * custom-element regions and delegates everything else to the markdown layer.
+ * Intentionally a flat scan, not a full HTML parser. It locates custom-element
+ * regions and emits everything else as markdown tokens for the consumer's
+ * markdown renderer.
  *
- * Code fences (```) and inline code (`) suppress tokenizing, so a custom-element
+ * Code fences (```) and inline code (`) suppress tokenizing so a custom-element
  * literal inside a code block stays markdown.
+ *
+ * The tokenizer walks one character at a time via the `Cursor` class. No
+ * regular expressions are used.
+ *
+ * Singleton: a `Tokenizer` instance holds no per-source state — each call to
+ * `tokenize(source)` constructs its own `Cursor`. The singleton avoids the
+ * cost (and noise) of `new Tokenizer()` at every call site.
  */
 
 export interface MarkdownToken {
@@ -36,151 +51,234 @@ export interface ElementCloseToken {
 
 export type Token = MarkdownToken | ElementOpenToken | ElementCloseToken;
 
-const ATTR = /([a-z][a-z0-9-]*)\s*=\s*"([^"]*)"/gi;
+const FENCE_MARKER = '```';
+const INLINE_CODE_MARKER = '`';
+const TAG_OPEN = '<';
+const TAG_CLOSE = '>';
+const SLASH = '/';
+const QUOTE = '"';
+const EQUALS = '=';
 
-export function tokenize(source: string): ReadonlyArray<Token> {
-  const tokens: Token[] = [];
+export class Tokenizer {
+  private static instance: Tokenizer | undefined;
 
-  let cursor = 0;
-  let mdStart = 0;
-  let inFence = false;
-  let inInlineCode = false;
+  private constructor() {}
 
-  const flushMarkdown = (end: number): void => {
-    if (end <= mdStart) {
-      return;
+  public static getInstance(): Tokenizer {
+    if (Tokenizer.instance === undefined) {
+      Tokenizer.instance = new Tokenizer();
     }
-    tokens.push({
-      kind: 'markdown',
-      value: source.slice(mdStart, end),
-      start: mdStart,
-      end,
-    });
-  };
-
-  while (cursor < source.length) {
-    if (!inFence && !inInlineCode && source.startsWith('```', cursor)) {
-      inFence = true;
-      cursor += 3;
-      continue;
-    }
-
-    if (inFence && source.startsWith('```', cursor)) {
-      inFence = false;
-      cursor += 3;
-      continue;
-    }
-
-    if (!inFence && source[cursor] === '`') {
-      inInlineCode = !inInlineCode;
-      cursor += 1;
-      continue;
-    }
-
-    if (inFence || inInlineCode) {
-      cursor += 1;
-      continue;
-    }
-
-    if (source[cursor] !== '<') {
-      cursor += 1;
-      continue;
-    }
-
-    const tagMatch = matchTagAt(source, cursor);
-    if (tagMatch === undefined) {
-      cursor += 1;
-      continue;
-    }
-
-    flushMarkdown(cursor);
-
-    tokens.push(tagMatch.token);
-    cursor = tagMatch.end;
-    mdStart = cursor;
+    return Tokenizer.instance;
   }
 
-  flushMarkdown(source.length);
+  public tokenize(source: string): readonly Token[] {
+    const cursor = new Cursor(source);
+    const tokens: Token[] = [];
+    let markdownStart = 0;
+    let inFence = false;
+    let inInlineCode = false;
 
-  return tokens;
-}
+    while (!cursor.eof()) {
+      if (!inFence && !inInlineCode && cursor.startsWith(FENCE_MARKER)) {
+        inFence = true;
+        cursor.advance(FENCE_MARKER.length);
+        continue;
+      }
 
-interface TagMatch {
-  readonly token: ElementOpenToken | ElementCloseToken;
-  readonly end: number;
-}
+      if (inFence && cursor.startsWith(FENCE_MARKER)) {
+        inFence = false;
+        cursor.advance(FENCE_MARKER.length);
+        continue;
+      }
 
-function matchTagAt(source: string, start: number): TagMatch | undefined {
-  if (source[start] !== '<') {
-    return undefined;
+      if (!inFence && cursor.peek() === INLINE_CODE_MARKER) {
+        inInlineCode = !inInlineCode;
+        cursor.advance(1);
+        continue;
+      }
+
+      if (inFence || inInlineCode) {
+        cursor.advance(1);
+        continue;
+      }
+
+      if (cursor.peek() !== TAG_OPEN) {
+        cursor.advance(1);
+        continue;
+      }
+
+      const tagStart = cursor.position();
+      const tagToken = this.scanTag(cursor);
+      if (tagToken === undefined) {
+        cursor.advance(1);
+        continue;
+      }
+
+      if (tagStart > markdownStart) {
+        tokens.push({
+          kind: 'markdown',
+          value: cursor.slice(markdownStart, tagStart),
+          start: markdownStart,
+          end: tagStart,
+        });
+      }
+
+      tokens.push(tagToken);
+      markdownStart = cursor.position();
+    }
+
+    if (cursor.position() > markdownStart) {
+      tokens.push({
+        kind: 'markdown',
+        value: cursor.slice(markdownStart, cursor.position()),
+        start: markdownStart,
+        end: cursor.position(),
+      });
+    }
+
+    return tokens;
   }
 
-  const isClose = source[start + 1] === '/';
-  const nameStart = isClose ? start + 2 : start + 1;
-  const nameMatch = /^[a-z][a-z0-9-]*/i.exec(source.slice(nameStart));
-  if (nameMatch === null) {
-    return undefined;
-  }
+  /**
+   * Attempts to scan a custom-element open or close tag at the current
+   * cursor position. Returns the token and leaves the cursor positioned
+   * after `>`, or returns undefined and restores the cursor to its
+   * original position.
+   */
+  private scanTag(cursor: Cursor): ElementOpenToken | ElementCloseToken | undefined {
+    const checkpoint = cursor.save();
 
-  const tag = nameMatch[0].toLowerCase();
-  if (!isCustomElementTag(tag)) {
-    return undefined;
-  }
+    if (cursor.peek() !== TAG_OPEN) {
+      return undefined;
+    }
+    cursor.advance(1);
 
-  const afterName = nameStart + nameMatch[0].length;
-  const gtIndex = findUnquotedGt(source, afterName);
-  if (gtIndex === undefined) {
-    return undefined;
-  }
+    const isClose = cursor.peek() === SLASH;
+    if (isClose) {
+      cursor.advance(1);
+    }
 
-  const inner = source.slice(afterName, gtIndex);
-  const selfClosing = inner.trimEnd().endsWith('/');
-  const attrSection = selfClosing ? inner.trimEnd().slice(0, -1) : inner;
+    if (!isTagNameStart(cursor.peek())) {
+      cursor.restore(checkpoint);
+      return undefined;
+    }
 
-  if (isClose) {
+    const nameStart = cursor.position();
+    cursor.advance(1);
+    while (isTagNameChar(cursor.peek())) {
+      cursor.advance(1);
+    }
+
+    const tag = cursor.slice(nameStart, cursor.position()).toLowerCase();
+    if (!isCustomElementTag(tag)) {
+      cursor.restore(checkpoint);
+      return undefined;
+    }
+
+    if (isClose) {
+      this.skipWhitespace(cursor);
+      if (cursor.peek() !== TAG_CLOSE) {
+        cursor.restore(checkpoint);
+        return undefined;
+      }
+      const end = cursor.position() + 1;
+      cursor.advance(1);
+      return { kind: 'element-close', tag, start: checkpoint, end };
+    }
+
+    const attrs = this.scanAttrs(cursor);
+    if (attrs === undefined) {
+      cursor.restore(checkpoint);
+      return undefined;
+    }
+
+    this.skipWhitespace(cursor);
+
+    let selfClosing = false;
+    if (cursor.peek() === SLASH) {
+      selfClosing = true;
+      cursor.advance(1);
+      this.skipWhitespace(cursor);
+    }
+
+    if (cursor.peek() !== TAG_CLOSE) {
+      cursor.restore(checkpoint);
+      return undefined;
+    }
+    const end = cursor.position() + 1;
+    cursor.advance(1);
+
     return {
-      token: {
-        kind: 'element-close',
-        tag,
-        start,
-        end: gtIndex + 1,
-      },
-      end: gtIndex + 1,
-    };
-  }
-
-  const attrs: Record<string, string> = {};
-  for (const match of attrSection.matchAll(ATTR)) {
-    const [, name, value] = match;
-    if (name !== undefined && value !== undefined) {
-      attrs[name] = value;
-    }
-  }
-
-  return {
-    token: {
       kind: 'element-open',
       tag,
       attrs,
       selfClosing,
-      start,
-      end: gtIndex + 1,
-    },
-    end: gtIndex + 1,
-  };
-}
+      start: checkpoint,
+      end,
+    };
+  }
 
-function findUnquotedGt(source: string, from: number): number | undefined {
-  let inQuote = false;
-  for (let i = from; i < source.length; i += 1) {
-    const char = source[i];
-    if (char === '"') {
-      inQuote = !inQuote;
-      continue;
-    }
-    if (char === '>' && !inQuote) {
-      return i;
+  /**
+   * Walks `name="value"` pairs (and boolean attributes) until it hits `>`
+   * or `/`. Returns undefined if the input is malformed (unterminated
+   * quote, unexpected EOF, etc.) so `scanTag` can roll the cursor back.
+   */
+  private scanAttrs(cursor: Cursor): Readonly<Record<string, string>> | undefined {
+    const attrs: Record<string, string> = {};
+
+    while (true) {
+      this.skipWhitespace(cursor);
+
+      const peek = cursor.peek();
+      if (peek === TAG_CLOSE || peek === SLASH) {
+        return attrs;
+      }
+      if (peek === undefined) {
+        return undefined;
+      }
+
+      if (!isAttrNameStart(peek)) {
+        return undefined;
+      }
+
+      const nameStart = cursor.position();
+      cursor.advance(1);
+      while (isAttrNameChar(cursor.peek())) {
+        cursor.advance(1);
+      }
+      const name = cursor.slice(nameStart, cursor.position()).toLowerCase();
+
+      this.skipWhitespace(cursor);
+
+      if (cursor.peek() !== EQUALS) {
+        attrs[name] = '';
+        continue;
+      }
+      cursor.advance(1);
+      this.skipWhitespace(cursor);
+
+      if (cursor.peek() !== QUOTE) {
+        return undefined;
+      }
+      cursor.advance(1);
+
+      const valueStart = cursor.position();
+      while (!cursor.eof() && cursor.peek() !== QUOTE) {
+        cursor.advance(1);
+      }
+      if (cursor.peek() !== QUOTE) {
+        return undefined;
+      }
+      const value = cursor.slice(valueStart, cursor.position());
+      cursor.advance(1);
+
+      attrs[name] = value;
     }
   }
-  return undefined;
+
+  private skipWhitespace(cursor: Cursor): void {
+    while (isWhitespace(cursor.peek())) {
+      cursor.advance(1);
+    }
+  }
 }

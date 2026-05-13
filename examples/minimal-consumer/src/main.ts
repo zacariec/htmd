@@ -1,5 +1,5 @@
 import '@htmd/elements';
-import { parse } from '@htmd/parser';
+import { Parser } from '@htmd/parser';
 
 const SAMPLE = `Looking at the data now.
 
@@ -19,7 +19,7 @@ if (stage === null) {
   throw new Error('missing #stage');
 }
 
-const { document: parsed, diagnostics } = parse(SAMPLE);
+const { document: parsed, diagnostics } = Parser.getInstance().parse(SAMPLE);
 
 console.info('parsed:', parsed);
 if (diagnostics.length > 0) {

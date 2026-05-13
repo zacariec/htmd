@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isCustomElementTag } from '../src/is-custom-element-tag.js';
-import { parse } from '../src/parser.js';
+import { Parser } from '../src/parser.js';
+
+const parser = Parser.getInstance();
 
 describe('isCustomElementTag', () => {
   it('accepts hyphenated lowercase names', () => {
@@ -24,11 +26,16 @@ describe('isCustomElementTag', () => {
     expect(isCustomElementTag('-bad')).toBe(false);
     expect(isCustomElementTag('UPPER-CASE')).toBe(false);
   });
+
+  it('rejects trailing or doubled hyphens', () => {
+    expect(isCustomElementTag('bad-')).toBe(false);
+    expect(isCustomElementTag('bad--name')).toBe(false);
+  });
 });
 
-describe('parse', () => {
+describe('Parser', () => {
   it('returns a markdown-only document for plain markdown', () => {
-    const { document, diagnostics } = parse('# Hello\n\nSome **bold** text.');
+    const { document, diagnostics } = parser.parse('# Hello\n\nSome **bold** text.');
 
     expect(diagnostics).toHaveLength(0);
     expect(document.nodes).toHaveLength(1);
@@ -37,7 +44,7 @@ describe('parse', () => {
 
   it('extracts a self-closing custom element', () => {
     const source = 'Before.\n\n<data-table src="/api/x"/>\n\nAfter.';
-    const { document, diagnostics } = parse(source);
+    const { document, diagnostics } = parser.parse(source);
 
     expect(diagnostics).toHaveLength(0);
     expect(document.nodes).toHaveLength(3);
@@ -57,7 +64,7 @@ describe('parse', () => {
   it('parses paired tags with nested children', () => {
     const source =
       '<choice-group name="q1"><choice-item value="a">A</choice-item><choice-item value="b">B</choice-item></choice-group>';
-    const { document, diagnostics } = parse(source);
+    const { document, diagnostics } = parser.parse(source);
 
     expect(diagnostics).toHaveLength(0);
     expect(document.nodes).toHaveLength(1);
@@ -76,8 +83,19 @@ describe('parse', () => {
     }
   });
 
+  it('treats a boolean attribute as empty-string value', () => {
+    const { document, diagnostics } = parser.parse('<refine-prompt disabled target="$.x"/>');
+
+    expect(diagnostics).toHaveLength(0);
+    const element = document.nodes[0];
+    expect(element?.type).toBe('element');
+    if (element?.type === 'element') {
+      expect(element.attrs).toEqual({ disabled: '', target: '$.x' });
+    }
+  });
+
   it('ignores plain HTML inside markdown', () => {
-    const { document } = parse('<div>not a custom element</div>');
+    const { document } = parser.parse('<div>not a custom element</div>');
 
     expect(document.nodes).toHaveLength(1);
     expect(document.nodes[0]?.type).toBe('markdown');
@@ -85,16 +103,35 @@ describe('parse', () => {
 
   it('does not tokenize inside fenced code', () => {
     const source = '```\n<data-table src="x"/>\n```';
-    const { document } = parse(source);
+    const { document } = parser.parse(source);
+
+    expect(document.nodes).toHaveLength(1);
+    expect(document.nodes[0]?.type).toBe('markdown');
+  });
+
+  it('does not tokenize inside inline code', () => {
+    const source = 'use the `<data-table src="x"/>` element';
+    const { document } = parser.parse(source);
 
     expect(document.nodes).toHaveLength(1);
     expect(document.nodes[0]?.type).toBe('markdown');
   });
 
   it('flags unmatched closing tag', () => {
-    const { diagnostics } = parse('</data-table>');
+    const { diagnostics } = parser.parse('</data-table>');
 
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe('warning');
+  });
+
+  it('flags missing closing tag', () => {
+    const { diagnostics } = parser.parse('<choice-group name="q">');
+
+    expect(diagnostics.length).toBeGreaterThanOrEqual(1);
+    expect(diagnostics[0]?.severity).toBe('warning');
+  });
+
+  it('returns the same singleton instance', () => {
+    expect(Parser.getInstance()).toBe(parser);
   });
 });
