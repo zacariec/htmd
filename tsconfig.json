@@ -1,7 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/pipe-protocol" },
+    { "path": "./packages/wire" },
     { "path": "./packages/parser" },
     { "path": "./packages/elements" }
   ]

@@ -26,9 +26,9 @@ importers:
       '@htmd/parser':
         specifier: workspace:*
         version: link:../../packages/parser
-      '@htmd/pipe-protocol':
+      '@htmd/wire':
         specifier: workspace:*
-        version: link:../../packages/pipe-protocol
+        version: link:../../packages/wire
     devDependencies:
       typescript:
         specifier: ^5.7.2
@@ -59,7 +59,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9
 
-  packages/pipe-protocol:
+  packages/wire:
     dependencies:
       zod:
         specifier: ^3.24.1

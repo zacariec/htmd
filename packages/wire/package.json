@@ -1,5 +1,5 @@
 {
-  "name": "@htmd/pipe-protocol",
+  "name": "@htmd/wire",
   "version": "0.0.0",
   "description": "Wire protocol event types for .htmd streaming",
   "license": "MIT",

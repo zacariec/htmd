@@ -151,7 +151,7 @@ This repository.
 
 - [`@htmd/parser`](../packages/parser) — parse `.htmd` source to AST.
 - [`@htmd/elements`](../packages/elements) — Lit web components for the base element set.
-- [`@htmd/pipe-protocol`](../packages/pipe-protocol) — Zod schemas for the wire event vocabulary.
+- [`@htmd/wire`](../packages/wire) — Zod schemas for the wire event vocabulary.
 
 ## 8. Non-goals
 

@@ -11,7 +11,7 @@
   "dependencies": {
     "@htmd/elements": "workspace:*",
     "@htmd/parser": "workspace:*",
-    "@htmd/pipe-protocol": "workspace:*"
+    "@htmd/wire": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

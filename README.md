@@ -14,7 +14,7 @@ A streamable HTML+Markdown wire format for AI output.
 |---|---|
 | [`@htmd/parser`](./packages/parser) | Parse `.htmd` source into an AST. Markdown via remark, HTML via the browser's parser. |
 | [`@htmd/elements`](./packages/elements) | First-party Lit web components — the base set of renderable elements (`<chat-message>`, `<data-table>`, `<choice-group>` + `<choice-item>`, `<code-block>`, `<image-card>`, `<file-preview>`, `<refine-prompt>`, `<htmd-fragment>`). |
-| [`@htmd/pipe-protocol`](./packages/pipe-protocol) | Wire protocol — Zod-validated event types for the streaming format. Used by both producers (harnesses, model adapters) and consumers (chat clients, IDE panels). |
+| [`@htmd/wire`](./packages/wire) | Wire protocol — Zod-validated event types for the streaming format. Used by both producers (harnesses, model adapters) and consumers (chat clients, IDE panels). |
 
 ## Spec
 
@@ -22,7 +22,7 @@ Full specification: [`spec/htmd-spec.md`](./spec/htmd-spec.md).
 
 ## Status
 
-Pre-alpha. APIs unstable. Built as the foundation layer for Helm (private), but intentionally framework-agnostic so other clients can build against it.
+Pre-alpha. APIs unstable. Framework-agnostic — works in any chat client, IDE panel, dashboard, or notebook where a producer can emit events and a consumer can render.
 
 ## Licence
 
