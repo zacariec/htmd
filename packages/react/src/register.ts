@@ -1,8 +1,8 @@
-import { registerHtmdElements } from '@zacariec/htmd-elements';
+import { registerHtmdElements } from '@htmdjs/elements';
 
 /**
  * Registers the base element set exactly once. Called by the React entrypoints
- * on first mount so consumers of `@zacariec/htmd-react` never have to think about
+ * on first mount so consumers of `@htmdjs/react` never have to think about
  * `registerHtmdElements()` themselves.
  */
 let registered = false;

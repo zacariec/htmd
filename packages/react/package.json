@@ -1,6 +1,6 @@
 {
-  "name": "@zacariec/htmd-react",
-  "version": "0.1.0-alpha.0",
+  "name": "@htmdjs/react",
+  "version": "0.1.0-alpha.1",
   "description": "React adapter for .htmd — static <HtmdDoc/> and streaming useHtmdStream() hook",
   "license": "MIT",
   "type": "module",
@@ -40,10 +40,10 @@
     "react": ">=18.0.0"
   },
   "dependencies": {
-    "@zacariec/htmd-elements": "workspace:*",
-    "@zacariec/htmd-parser": "workspace:*",
-    "@zacariec/htmd-renderer": "workspace:*",
-    "@zacariec/htmd-wire": "workspace:*"
+    "@htmdjs/elements": "workspace:*",
+    "@htmdjs/parser": "workspace:*",
+    "@htmdjs/renderer": "workspace:*",
+    "@htmdjs/wire": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.1.0",

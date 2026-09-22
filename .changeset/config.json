@@ -4,12 +4,12 @@
   "commit": false,
   "fixed": [
     [
-      "@zacariec/htmd",
-      "@zacariec/htmd-parser",
-      "@zacariec/htmd-elements",
-      "@zacariec/htmd-wire",
-      "@zacariec/htmd-renderer",
-      "@zacariec/htmd-react"
+      "@htmdjs/core",
+      "@htmdjs/parser",
+      "@htmdjs/elements",
+      "@htmdjs/wire",
+      "@htmdjs/renderer",
+      "@htmdjs/react"
     ]
   ],
   "linked": [],

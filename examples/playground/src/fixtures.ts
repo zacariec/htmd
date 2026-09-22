@@ -1,4 +1,4 @@
-import type { WireEvent } from '@zacariec/htmd-wire';
+import type { WireEvent } from '@htmdjs/wire';
 import fixture01 from '../../../packages/renderer/test/fixtures/01-single-message.jsonl?raw';
 import fixture02 from '../../../packages/renderer/test/fixtures/02-ordered-fill.jsonl?raw';
 import fixture03 from '../../../packages/renderer/test/fixtures/03-out-of-order.jsonl?raw';

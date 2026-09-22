@@ -1,4 +1,4 @@
-import { registerHtmdElements } from '@zacariec/htmd-elements';
+import { registerHtmdElements } from '@htmdjs/elements';
 import type { JSX } from 'react';
 import { useState } from 'react';
 import { StaticTab } from './static-tab.js';

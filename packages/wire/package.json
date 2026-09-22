@@ -1,6 +1,6 @@
 {
-  "name": "@zacariec/htmd-wire",
-  "version": "0.1.0-alpha.0",
+  "name": "@htmdjs/wire",
+  "version": "0.1.0-alpha.1",
   "description": "Wire protocol event types for .htmd streaming",
   "license": "MIT",
   "type": "module",

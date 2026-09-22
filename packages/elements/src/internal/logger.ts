@@ -1,5 +1,5 @@
 /**
- * Internal logger for `@zacariec/htmd-elements`.
+ * Internal logger for `@htmdjs/elements`.
  *
  * Console-backed by default; consumers can swap the sink (test harnesses,
  * production log pipelines) via `setHtmdElementsLogSink`.

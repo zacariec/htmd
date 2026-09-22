@@ -1,9 +1,9 @@
-# `@zacariec/htmd-wire`
+# `@htmdjs/wire`
 
 Zod-validated wire event types for the `.htmd` streaming protocol. Seven event kinds, discriminated union, JSON-line parse helper.
 
 ```ts
-import { parseWireEventJson, WireEvent } from '@zacariec/htmd-wire';
+import { parseWireEventJson, WireEvent } from '@htmdjs/wire';
 
 for (const line of jsonl.split('\n')) {
   const event = parseWireEventJson(line);

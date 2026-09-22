@@ -23,10 +23,10 @@ importers:
 
   examples/minimal-consumer:
     dependencies:
-      '@zacariec/htmd-elements':
+      '@htmdjs/elements':
         specifier: workspace:*
         version: link:../../packages/elements
-      '@zacariec/htmd-renderer':
+      '@htmdjs/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
     devDependencies:
@@ -39,16 +39,16 @@ importers:
 
   examples/playground:
     dependencies:
-      '@zacariec/htmd-elements':
+      '@htmdjs/elements':
         specifier: workspace:*
         version: link:../../packages/elements
-      '@zacariec/htmd-react':
+      '@htmdjs/react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@zacariec/htmd-renderer':
+      '@htmdjs/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer
-      '@zacariec/htmd-wire':
+      '@htmdjs/wire':
         specifier: workspace:*
         version: link:../../packages/wire
       react:
@@ -76,7 +76,7 @@ importers:
 
   packages/elements:
     dependencies:
-      '@zacariec/htmd-parser':
+      '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser
       lit:
@@ -98,16 +98,16 @@ importers:
 
   packages/htmd:
     dependencies:
-      '@zacariec/htmd-elements':
+      '@htmdjs/elements':
         specifier: workspace:*
         version: link:../elements
-      '@zacariec/htmd-parser':
+      '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser
-      '@zacariec/htmd-renderer':
+      '@htmdjs/renderer':
         specifier: workspace:*
         version: link:../renderer
-      '@zacariec/htmd-wire':
+      '@htmdjs/wire':
         specifier: workspace:*
         version: link:../wire
     devDependencies:
@@ -126,16 +126,16 @@ importers:
 
   packages/react:
     dependencies:
-      '@zacariec/htmd-elements':
+      '@htmdjs/elements':
         specifier: workspace:*
         version: link:../elements
-      '@zacariec/htmd-parser':
+      '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser
-      '@zacariec/htmd-renderer':
+      '@htmdjs/renderer':
         specifier: workspace:*
         version: link:../renderer
-      '@zacariec/htmd-wire':
+      '@htmdjs/wire':
         specifier: workspace:*
         version: link:../wire
     devDependencies:
@@ -166,10 +166,10 @@ importers:
 
   packages/renderer:
     dependencies:
-      '@zacariec/htmd-parser':
+      '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser
-      '@zacariec/htmd-wire':
+      '@htmdjs/wire':
         specifier: workspace:*
         version: link:../wire
       micromark:
@@ -179,7 +179,7 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
     devDependencies:
-      '@zacariec/htmd-elements':
+      '@htmdjs/elements':
         specifier: workspace:*
         version: link:../elements
       jsdom:

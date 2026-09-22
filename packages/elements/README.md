@@ -1,9 +1,9 @@
-# `@zacariec/htmd-elements`
+# `@htmdjs/elements`
 
 Lit web components — the base element set for `.htmd`. Nine components: `<chat-message>`, `<data-table>`, `<choice-group>` + `<choice-item>`, `<code-block>`, `<image-card>`, `<file-preview>`, `<refine-prompt>`, `<htmd-fragment>`.
 
 ```ts
-import { registerHtmdElements } from '@zacariec/htmd-elements';
+import { registerHtmdElements } from '@htmdjs/elements';
 registerHtmdElements();
 ```
 

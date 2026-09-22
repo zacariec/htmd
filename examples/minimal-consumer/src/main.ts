@@ -1,5 +1,5 @@
-import { HtmdElementEvents, registerHtmdElements } from '@zacariec/htmd-elements';
-import { renderHtmdSource } from '@zacariec/htmd-renderer';
+import { HtmdElementEvents, registerHtmdElements } from '@htmdjs/elements';
+import { renderHtmdSource } from '@htmdjs/renderer';
 
 registerHtmdElements();
 

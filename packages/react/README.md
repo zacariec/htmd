@@ -1,10 +1,10 @@
-# `@zacariec/htmd-react`
+# `@htmdjs/react`
 
 React adapter for HTMD. Requires React 18 or newer.
 
 ```tsx
-import { HtmdDoc, useHtmdStream } from '@zacariec/htmd-react';
-import type { HtmdStreamSource } from '@zacariec/htmd-react';
+import { HtmdDoc, useHtmdStream } from '@htmdjs/react';
+import type { HtmdStreamSource } from '@htmdjs/react';
 
 export function Message() {
   return <HtmdDoc source={'# Hello\n\nStreaming-first Markdown.'} />;
@@ -27,4 +27,4 @@ Keep `source` stable across renders. Accepted stream sources are `Iterable<WireE
 
 Completion, failure, unmount, and source replacement stop further event application. Owned stream readers are cancelled/released and unfinished async iterators receive `return()`. SSE listeners are removed, but the hook does not close caller-owned EventSource connections. Source replacement clears prior document/error state. Automatic reconnect and restoration of event history belong to the host application.
 
-Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @zacariec/htmd-react@alpha`.
+Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @htmdjs/react@alpha`.

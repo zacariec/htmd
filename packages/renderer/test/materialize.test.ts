@@ -1,6 +1,6 @@
-import { registerHtmdElements } from '@zacariec/htmd-elements';
-import type { ChoiceGroup, ChoiceItem, DataTable, RefinePrompt } from '@zacariec/htmd-elements';
-import { Parser } from '@zacariec/htmd-parser';
+import { registerHtmdElements } from '@htmdjs/elements';
+import type { ChoiceGroup, ChoiceItem, DataTable, RefinePrompt } from '@htmdjs/elements';
+import { Parser } from '@htmdjs/parser';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderMarkdown } from '../src/markdown.js';
 import { applySafeAttrs, materializeInto, renderHtmdSource } from '../src/materialize.js';

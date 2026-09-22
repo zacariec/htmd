@@ -1,14 +1,14 @@
-# `@zacariec/htmd-renderer`
+# `@htmdjs/renderer`
 
 Framework-independent DOM rendering for HTMD.
 
 - `renderHtmdSource(target, source)` renders a static document and returns parser diagnostics.
 - `materializeInto(target, nodes, options?)` reconciles parsed nodes without needlessly replacing component instances.
-- `RegionTreeRenderer` consumes decoded `@zacariec/htmd-wire` events into addressable regions.
+- `RegionTreeRenderer` consumes decoded `@htmdjs/wire` events into addressable regions.
 
 ```ts
-import { RegionTreeRenderer } from '@zacariec/htmd-renderer';
-import { registerHtmdElements } from '@zacariec/htmd-elements';
+import { RegionTreeRenderer } from '@htmdjs/renderer';
+import { registerHtmdElements } from '@htmdjs/elements';
 
 registerHtmdElements();
 const container = document.querySelector('#stage');
@@ -29,4 +29,4 @@ Each append still parses the affected region. Unchanged blocks reuse rendered re
 
 Raw HTML stays escaped and `on*` attributes are refused. Register only trusted components; components own their URL and payload policies.
 
-Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @zacariec/htmd-renderer@alpha`.
+Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @htmdjs/renderer@alpha`.

@@ -1,6 +1,6 @@
 {
-  "name": "@zacariec/htmd-renderer",
-  "version": "0.1.0-alpha.0",
+  "name": "@htmdjs/renderer",
+  "version": "0.1.0-alpha.1",
   "description": "Framework-agnostic DOM materializer for .htmd — static render and streaming region trees",
   "license": "MIT",
   "type": "module",
@@ -37,13 +37,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@zacariec/htmd-parser": "workspace:*",
-    "@zacariec/htmd-wire": "workspace:*",
+    "@htmdjs/parser": "workspace:*",
+    "@htmdjs/wire": "workspace:*",
     "micromark": "^4.0.1",
     "micromark-extension-gfm": "^3.0.0"
   },
   "devDependencies": {
-    "@zacariec/htmd-elements": "workspace:*",
+    "@htmdjs/elements": "workspace:*",
     "jsdom": "^25.0.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

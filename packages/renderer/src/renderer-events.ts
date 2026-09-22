@@ -1,4 +1,4 @@
-import type { Diagnostic } from '@zacariec/htmd-parser';
+import type { Diagnostic } from '@htmdjs/parser';
 
 /**
  * Lifecycle events dispatched by `RegionTreeRenderer` (on the renderer

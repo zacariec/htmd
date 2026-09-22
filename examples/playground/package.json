@@ -9,10 +9,10 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
-    "@zacariec/htmd-elements": "workspace:*",
-    "@zacariec/htmd-react": "workspace:*",
-    "@zacariec/htmd-renderer": "workspace:*",
-    "@zacariec/htmd-wire": "workspace:*",
+    "@htmdjs/elements": "workspace:*",
+    "@htmdjs/react": "workspace:*",
+    "@htmdjs/renderer": "workspace:*",
+    "@htmdjs/wire": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

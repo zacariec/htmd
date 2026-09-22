@@ -1,4 +1,4 @@
-import { isCustomElementTag } from '@zacariec/htmd-parser';
+import { isCustomElementTag } from '@htmdjs/parser';
 import { LitElement, css, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { ref } from 'lit/directives/ref.js';

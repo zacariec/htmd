@@ -1,9 +1,9 @@
 /**
- * `@zacariec/htmd-elements` — base element set for `.htmd`.
+ * `@htmdjs/elements` — base element set for `.htmd`.
  *
  * Importing this module never touches the DOM, so it is safe in Node/SSR.
  * Call `registerHtmdElements()` (a browser no-op guard is built in) to
- * register the custom elements, or use the `@zacariec/htmd` browser entry which does it
+ * register the custom elements, or use the `@htmdjs/core` browser entry which does it
  * for you.
  */
 

@@ -1,7 +1,7 @@
 # `.htmd` Specification
 
 **Status:** 0.1 alpha.
-**Version:** `0.1.0-alpha.0`
+**Version:** `0.1.0-alpha.1`
 
 ## 1. What `.htmd` is
 
@@ -122,7 +122,7 @@ The React hook accepts decoded event iterables, decoded `ReadableStream<WireEven
 
 ## 4. The base element set
 
-`@zacariec/htmd-elements` ships nine Lit web components. Consumers can extend with their own trusted custom elements; the base set is the vocabulary producers can rely on.
+`@htmdjs/elements` ships nine Lit web components. Consumers can extend with their own trusted custom elements; the base set is the vocabulary producers can rely on.
 
 ### Base elements
 
@@ -179,7 +179,7 @@ The single hard rule: **producers never emit code that executes in the consumer.
 - Custom-element attributes are strings; the element's TypeScript decides what they mean.
 - `<htmd-fragment>` payloads use a restricted JSON DSL with whitelisted tags + binding expressions, parsed not evaled.
 
-**Consumer requirement:** the markdown renderer must never enable raw HTML. `@zacariec/htmd-renderer` uses micromark with raw HTML escaped and `javascript:` links stripped; consumers who plug in a different renderer must match that posture.
+**Consumer requirement:** the markdown renderer must never enable raw HTML. `@htmdjs/renderer` uses micromark with raw HTML escaped and `javascript:` links stripped; consumers who plug in a different renderer must match that posture.
 
 Register only trusted custom-element implementations: their code controls attribute semantics, requests, and side effects. A hyphenated name and parser diagnostics do not sandbox arbitrary components. Hosts must enforce authorization and safe endpoint policy even for same-origin data requests.
 
@@ -193,12 +193,12 @@ Register only trusted custom-element implementations: their code controls attrib
 
 This repository.
 
-- [`@zacariec/htmd-parser`](../packages/parser) — parse source into AST, pending state, and diagnostics.
-- [`@zacariec/htmd-wire`](../packages/wire) — event-shape validation.
-- [`@zacariec/htmd-elements`](../packages/elements) — built-in components.
-- [`@zacariec/htmd-renderer`](../packages/renderer) — state-preserving DOM rendering and protocol lifecycle.
-- [`@zacariec/htmd-react`](../packages/react) — static documents and stream lifecycle adapter.
-- [`@zacariec/htmd`](../packages/htmd) — meta package.
+- [`@htmdjs/parser`](../packages/parser) — parse source into AST, pending state, and diagnostics.
+- [`@htmdjs/wire`](../packages/wire) — event-shape validation.
+- [`@htmdjs/elements`](../packages/elements) — built-in components.
+- [`@htmdjs/renderer`](../packages/renderer) — state-preserving DOM rendering and protocol lifecycle.
+- [`@htmdjs/react`](../packages/react) — static documents and stream lifecycle adapter.
+- [`@htmdjs/core`](../packages/htmd) — meta package.
 
 ## 8. Non-goals
 

@@ -4,7 +4,7 @@ import {
   HtmdFragment,
   registerHtmdElements,
   setHtmdElementsLogSink,
-} from '@zacariec/htmd-elements';
+} from '@htmdjs/elements';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegionTreeRenderer } from '../src/region-tree-renderer.js';
 import { loadFixture } from './helpers.js';

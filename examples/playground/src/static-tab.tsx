@@ -1,4 +1,4 @@
-import { HtmdDoc } from '@zacariec/htmd-react';
+import { HtmdDoc } from '@htmdjs/react';
 import type { JSX } from 'react';
 import { useCallback, useDeferredValue, useState } from 'react';
 

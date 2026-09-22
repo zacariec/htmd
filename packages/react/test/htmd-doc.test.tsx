@@ -1,5 +1,5 @@
+import { setHtmdElementsLogSink } from '@htmdjs/elements';
 import { cleanup, render } from '@testing-library/react';
-import { setHtmdElementsLogSink } from '@zacariec/htmd-elements';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HtmdDoc } from '../src/htmd-doc.js';
 

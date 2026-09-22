@@ -1,5 +1,5 @@
 /**
- * Event names dispatched by `@zacariec/htmd-elements` components.
+ * Event names dispatched by `@htmdjs/elements` components.
  *
  * Every event bubbles and is composed, so consumers listen on any ancestor
  * (typically the region root or the document).

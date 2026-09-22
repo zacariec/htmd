@@ -1,6 +1,6 @@
 name: Release
 
-# Configure an npm publishing token for the @zacariec scope as NPM_TOKEN.
+# Configure an npm publishing token for the @htmdjs scope as NPM_TOKEN.
 # Push a v* prerelease tag only after the local verification gates pass.
 # The workflow verifies, packs, publishes under alpha, then creates a GitHub
 # prerelease with the same npm archives attached.

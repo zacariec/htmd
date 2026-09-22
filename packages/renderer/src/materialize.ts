@@ -1,5 +1,5 @@
-import { Parser, isCustomElementTag } from '@zacariec/htmd-parser';
-import type { ElementBlock, HtmdNode, ParseResult } from '@zacariec/htmd-parser';
+import { Parser, isCustomElementTag } from '@htmdjs/parser';
+import type { ElementBlock, HtmdNode, ParseResult } from '@htmdjs/parser';
 
 import { renderMarkdown } from './markdown.js';
 

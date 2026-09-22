@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@zacariec/htmd-elements": "workspace:*",
-    "@zacariec/htmd-renderer": "workspace:*"
+    "@htmdjs/elements": "workspace:*",
+    "@htmdjs/renderer": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

@@ -1,6 +1,6 @@
-import { RegionTreeRenderer, RendererEvents } from '@zacariec/htmd-renderer';
-import type { RendererErrorDetail } from '@zacariec/htmd-renderer';
-import type { WireEvent } from '@zacariec/htmd-wire';
+import { RegionTreeRenderer, RendererEvents } from '@htmdjs/renderer';
+import type { RendererErrorDetail } from '@htmdjs/renderer';
+import type { WireEvent } from '@htmdjs/wire';
 import { type RefCallback, useCallback, useEffect, useState } from 'react';
 
 import { ensureHtmdElementsRegistered } from './register.js';

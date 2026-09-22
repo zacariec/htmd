@@ -1,5 +1,5 @@
-import type { Diagnostic } from '@zacariec/htmd-parser';
-import { renderHtmdSource } from '@zacariec/htmd-renderer';
+import type { Diagnostic } from '@htmdjs/parser';
+import { renderHtmdSource } from '@htmdjs/renderer';
 import type { JSX } from 'react';
 import { type HTMLAttributes, useEffect, useRef } from 'react';
 

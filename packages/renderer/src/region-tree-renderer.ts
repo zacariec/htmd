@@ -1,6 +1,6 @@
-import { Parser, isCustomElementTag } from '@zacariec/htmd-parser';
-import type { Diagnostic } from '@zacariec/htmd-parser';
-import { safeParseWireEvent } from '@zacariec/htmd-wire';
+import { Parser, isCustomElementTag } from '@htmdjs/parser';
+import type { Diagnostic } from '@htmdjs/parser';
+import { safeParseWireEvent } from '@htmdjs/wire';
 import type {
   DocDoneEvent,
   DocOpenEvent,
@@ -10,7 +10,7 @@ import type {
   RegionReplaceEvent,
   StreamEvent,
   WireEvent,
-} from '@zacariec/htmd-wire';
+} from '@htmdjs/wire';
 
 import { applySafeAttrs, materializeInto } from './materialize.js';
 import { RendererEvents } from './renderer-events.js';
@@ -27,7 +27,7 @@ import type {
 /**
  * `RegionTreeRenderer` — the streaming materializer.
  *
- * Consumes `@zacariec/htmd-wire` events and maintains a live DOM tree under a root
+ * Consumes `@htmdjs/wire` events and maintains a live DOM tree under a root
  * element. Each region is an addressable element (`data-htmd-region="$.path"`);
  * streamed `.htmd` chunks accumulate per region and re-materialize only that
  * region's content — never the whole document.

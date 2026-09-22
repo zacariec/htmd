@@ -1,6 +1,6 @@
+import { setHtmdElementsLogSink } from '@htmdjs/elements';
+import type { WireEvent } from '@htmdjs/wire';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { setHtmdElementsLogSink } from '@zacariec/htmd-elements';
-import type { WireEvent } from '@zacariec/htmd-wire';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type HtmdStreamSource, useHtmdStream } from '../src/use-htmd-stream.js';
 

@@ -1,6 +1,6 @@
 {
-  "name": "@zacariec/htmd-elements",
-  "version": "0.1.0-alpha.0",
+  "name": "@htmdjs/elements",
+  "version": "0.1.0-alpha.1",
   "description": "Lit web components — the base element set for .htmd",
   "license": "MIT",
   "type": "module",
@@ -37,7 +37,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@zacariec/htmd-parser": "workspace:*",
+    "@htmdjs/parser": "workspace:*",
     "lit": "^3.2.1",
     "zod": "^4.0.0"
   },

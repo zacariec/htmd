@@ -1,9 +1,9 @@
-# `@zacariec/htmd-parser`
+# `@htmdjs/parser`
 
 Dependency-free parser for HTMD: Markdown prose and custom-element structure, with diagnostics and explicit partial-source handling.
 
 ```ts
-import { Parser } from '@zacariec/htmd-parser';
+import { Parser } from '@htmdjs/parser';
 
 const parser = Parser.getInstance();
 const partial = parser.parse('Hello <file-pre', { streaming: true });
@@ -18,4 +18,4 @@ Markdown stays provisional and verbatim. Code fences and code spans do not creat
 
 Attribute values decode the five named XML-style entities and valid decimal/hex Unicode references exactly once. Unknown/invalid references stay literal. This backfills Bench's round-trip fix; consumers must not decode attributes again. Forbidden-scheme diagnostics inspect decoded values but are not a replacement for component URL policies.
 
-Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @zacariec/htmd-parser@alpha`.
+Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @htmdjs/parser@alpha`.

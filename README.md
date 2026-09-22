@@ -7,19 +7,19 @@ Markdown already supports streamed text and embedded HTML. HTMD adds an explicit
 ## Install the alpha
 
 ```sh
-npm install @zacariec/htmd@alpha
+npm install @htmdjs/core@alpha
 # Optional React adapter:
-npm install @zacariec/htmd-react@alpha
+npm install @htmdjs/react@alpha
 ```
 
-The packages belong to the `@zacariec` scope. The unrelated unscoped npm package `htmd` is not this project.
+The packages belong to the `@htmdjs` organization. The unrelated unscoped npm package `htmd` is not this project.
 
 Importing the meta package with the browser export condition registers the base custom elements. Node/SSR imports do not register elements; DOM rendering still requires a browser.
 
 ## Stream into a document
 
 ```ts
-import { RegionTreeRenderer, registerHtmdElements } from '@zacariec/htmd';
+import { RegionTreeRenderer, registerHtmdElements } from '@htmdjs/core';
 
 registerHtmdElements();
 const container = document.querySelector('#answer');
@@ -56,8 +56,8 @@ HTMD is **not a fully incremental Markdown parser**. It reparses the affected re
 ## React
 
 ```tsx
-import { HtmdDoc, useHtmdStream } from '@zacariec/htmd-react';
-import type { HtmdStreamSource } from '@zacariec/htmd-react';
+import { HtmdDoc, useHtmdStream } from '@htmdjs/react';
+import type { HtmdStreamSource } from '@htmdjs/react';
 
 export function StaticMessage() {
   return <HtmdDoc source={'# Hello\n\n**Markdown**, with optional custom elements.'} />;
@@ -75,12 +75,12 @@ Keep `source` stable across renders. Supported sources: synchronous/async iterab
 
 | Package | Purpose |
 |---|---|
-| [`@zacariec/htmd`](./packages/htmd) | Meta package: parser, wire protocol, components, and renderer. |
-| [`@zacariec/htmd-parser`](./packages/parser) | Dependency-free source parser, streaming/pending state, diagnostics, and decoded attributes. |
-| [`@zacariec/htmd-wire`](./packages/wire) | Zod-validated event shapes and JSON event parsing. |
-| [`@zacariec/htmd-elements`](./packages/elements) | Nine Lit components for choices, refinement, files, images, tables, code, messages, and structured fragments. |
-| [`@zacariec/htmd-renderer`](./packages/renderer) | Static rendering and state-preserving region streaming. |
-| [`@zacariec/htmd-react`](./packages/react) | Static document component and stream lifecycle hook. |
+| [`@htmdjs/core`](./packages/htmd) | Meta package: parser, wire protocol, components, and renderer. |
+| [`@htmdjs/parser`](./packages/parser) | Dependency-free source parser, streaming/pending state, diagnostics, and decoded attributes. |
+| [`@htmdjs/wire`](./packages/wire) | Zod-validated event shapes and JSON event parsing. |
+| [`@htmdjs/elements`](./packages/elements) | Nine Lit components for choices, refinement, files, images, tables, code, messages, and structured fragments. |
+| [`@htmdjs/renderer`](./packages/renderer) | Static rendering and state-preserving region streaming. |
+| [`@htmdjs/react`](./packages/react) | Static document component and stream lifecycle hook. |
 
 ## Playground and development
 

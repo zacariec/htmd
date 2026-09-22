@@ -3,7 +3,7 @@
  * registers the base custom elements. Bundlers must not tree-shake this file
  * (see the `sideEffects` allowlist in `package.json`).
  */
-import { registerHtmdElements } from '@zacariec/htmd-elements';
+import { registerHtmdElements } from '@htmdjs/elements';
 
 registerHtmdElements();
 
@@ -12,7 +12,7 @@ export {
   DiagnosticSeverity,
   isCustomElementTag,
   Parser,
-} from '@zacariec/htmd-parser';
+} from '@htmdjs/parser';
 export type {
   Diagnostic,
   ElementBlock,
@@ -21,7 +21,7 @@ export type {
   MarkdownBlock,
   ParseOptions,
   ParseResult,
-} from '@zacariec/htmd-parser';
+} from '@htmdjs/parser';
 
 export {
   ChatMessage,
@@ -38,7 +38,7 @@ export {
   RefinePrompt,
   registerHtmdElements,
   setHtmdElementsLogSink,
-} from '@zacariec/htmd-elements';
+} from '@htmdjs/elements';
 export type {
   ChatMessageAuthor,
   ChatMessageStatus,
@@ -46,7 +46,7 @@ export type {
   ChoiceSelectDetail,
   HtmdElementsLogSink,
   RefineDetail,
-} from '@zacariec/htmd-elements';
+} from '@htmdjs/elements';
 
 export {
   DocDoneEvent,
@@ -61,7 +61,7 @@ export {
   safeParseWireEvent,
   StreamEvent,
   WireEvent,
-} from '@zacariec/htmd-wire';
+} from '@htmdjs/wire';
 
 export {
   applySafeAttrs,
@@ -70,7 +70,7 @@ export {
   RendererEvents,
   renderHtmdSource,
   renderMarkdown,
-} from '@zacariec/htmd-renderer';
+} from '@htmdjs/renderer';
 export type {
   DocDoneDetail,
   DocOpenDetail,
@@ -79,4 +79,4 @@ export type {
   RegionReplacedDetail,
   RegionUpdatedDetail,
   RendererErrorDetail,
-} from '@zacariec/htmd-renderer';
+} from '@htmdjs/renderer';
