@@ -1,7 +1,7 @@
 # `.htmd` Specification
 
 **Status:** 0.1 alpha.
-**Version:** `0.1.0-alpha.1`
+**Version:** `0.1.0-alpha.2`
 
 ## 1. What `.htmd` is
 

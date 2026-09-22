@@ -19,3 +19,5 @@ Initial organization alpha (`0.1.0-alpha.1`). Install `@htmdjs/core@alpha`; the 
 - All six public packages use the `@htmdjs` scope and default to the `alpha` dist-tag. Updated model instructions, lifecycle/security documentation, and an interactive partial-stream playground example.
 
 Limitations: affected region buffers are still reparsed; reconciliation is positional, not keyed movement. Automatic reconnect, persistent event logs, historical external-data snapshots, and Bench-specific editor/import policies are host responsibilities.
+
+`0.1.0-alpha.2` corrects release packaging: the root build clears package output directories and forces TypeScript emission, excluding obsolete JavaScript and source maps left by earlier builds. Public runtime APIs are unchanged.
