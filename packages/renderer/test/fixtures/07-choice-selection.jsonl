@@ -1,0 +1,7 @@
+{"type":"doc-open","seq":0,"id":"doc-07","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"Three options, pick one:\n\n"}
+{"type":"stream","seq":3,"target":"$.msg.body","chunk":"<choice-group name=\"next-step\"><choice-item value=\"dig\">Dig into the top performer</choice-item><choice-item value=\"export\">Export the table</choice-item><choice-item value=\"another\">Show a different cut</choice-item></choice-group>"}
+{"type":"region-done","seq":4,"id":"$.msg.body"}
+{"type":"region-done","seq":5,"id":"$.msg"}
+{"type":"doc-done","seq":6,"id":"doc-07"}

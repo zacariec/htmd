@@ -1,24 +1,28 @@
 /**
- * `@htmd/elements` — base element set for `.htmd`.
+ * `@zacariec/htmd-elements` — base element set for `.htmd`.
  *
- * Importing this module from a browser context registers each custom element
- * with `customElements.define()`. Idempotent; safe to import multiple times.
+ * Importing this module never touches the DOM, so it is safe in Node/SSR.
+ * Call `registerHtmdElements()` (a browser no-op guard is built in) to
+ * register the custom elements, or use the `@zacariec/htmd` browser entry which does it
+ * for you.
  */
 
-import './chat-message.js';
-import './data-table.js';
-import './choice-group.js';
-import './code-block.js';
-import './image-card.js';
-import './file-preview.js';
-import './refine.js';
-import './htmd-fragment.js';
-
 export { ChatMessage } from './chat-message.js';
-export { DataTable } from './data-table.js';
-export { ChoiceGroup, Choice } from './choice-group.js';
+export type { ChatMessageAuthor, ChatMessageStatus } from './chat-message.js';
+export { ChoiceGroup } from './choice-group.js';
+export { ChoiceItem } from './choice-item.js';
 export { CodeBlock } from './code-block.js';
-export { ImageCard } from './image-card.js';
+export { DataTable } from './data-table.js';
 export { FilePreview } from './file-preview.js';
-export { Refine } from './refine.js';
 export { HtmdFragment } from './htmd-fragment.js';
+export { ImageCard } from './image-card.js';
+export { RefinePrompt } from './refine-prompt.js';
+
+export { defineOnce } from './define-once.js';
+export { HtmdElementTag, registerHtmdElements } from './register-htmd-elements.js';
+
+export { HtmdElementEvents } from './events.js';
+export type { ChoiceDetail, ChoiceSelectDetail, RefineDetail } from './events.js';
+
+export { setHtmdElementsLogSink } from './internal/logger.js';
+export type { HtmdElementsLogSink } from './internal/logger.js';

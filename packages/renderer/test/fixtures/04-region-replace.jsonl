@@ -1,0 +1,10 @@
+{"type":"doc-open","seq":0,"id":"doc-04","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"First pass: the answer is **42**.\n\n"}
+{"type":"region","seq":3,"id":"$.msg.body.details","tag":"div","parent":"$.msg.body"}
+{"type":"stream","seq":4,"target":"$.msg.body.details","chunk":"Derived from the wrong dataset."}
+{"type":"region-done","seq":5,"id":"$.msg.body"}
+{"type":"region-replace","seq":6,"id":"$.msg.body","body":"Corrected: the answer is **54**, from the 2026 dataset.\n\n<image-card src=\"/charts/corrected.png\" alt=\"Corrected chart\" width=\"800\" height=\"450\"/>"}
+{"type":"region-done","seq":7,"id":"$.msg.body"}
+{"type":"region-done","seq":8,"id":"$.msg"}
+{"type":"doc-done","seq":9,"id":"doc-04"}

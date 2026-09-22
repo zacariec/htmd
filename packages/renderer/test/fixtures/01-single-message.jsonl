@@ -1,0 +1,8 @@
+{"type":"doc-open","seq":0,"id":"doc-01","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent","author-name":"Navigator","status":"streaming"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"Looking at the Q4 numbers now.\n\n"}
+{"type":"stream","seq":3,"target":"$.msg.body","chunk":"<data-table src=\"/api/sales/q4\"/>\n\n"}
+{"type":"stream","seq":4,"target":"$.msg.body","chunk":"Revenue is **up 12%** quarter over quarter."}
+{"type":"region-done","seq":5,"id":"$.msg.body"}
+{"type":"region-done","seq":6,"id":"$.msg"}
+{"type":"doc-done","seq":7,"id":"doc-01"}

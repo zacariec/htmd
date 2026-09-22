@@ -1,5 +1,7 @@
-import { LitElement, css, html } from 'lit';
-import { defineOnce } from './define-once.js';
+import { LitElement, css, html, nothing } from 'lit';
+import type { TemplateResult } from 'lit';
+
+import { sanitizeUrl } from './internal/sanitize-url.js';
 
 export class ImageCard extends LitElement {
   public static override styles = css`
@@ -40,14 +42,15 @@ export class ImageCard extends LitElement {
   public height: number | undefined = undefined;
   public caption: string = '';
 
-  public override render(): unknown {
+  public override render(): TemplateResult {
     const aspectRatio = this.aspectRatioStyle();
+    const safeSrc = this.src.length > 0 ? sanitizeUrl(this.src) : undefined;
     return html`
       <figure>
         <div class="frame" style=${aspectRatio}>
-          <img src=${this.src} alt=${this.alt} loading="lazy" />
+          <img src=${safeSrc ?? nothing} alt=${this.alt} loading="lazy" />
         </div>
-        ${this.caption.length > 0 ? html`<figcaption>${this.caption}</figcaption>` : null}
+        ${this.caption.length > 0 ? html`<figcaption>${this.caption}</figcaption>` : undefined}
       </figure>
     `;
   }
@@ -59,5 +62,3 @@ export class ImageCard extends LitElement {
     return `aspect-ratio: ${this.width} / ${this.height};`;
   }
 }
-
-defineOnce('image-card', ImageCard);

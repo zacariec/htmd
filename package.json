@@ -1,7 +1,7 @@
 {
-  "name": "htmd",
+  "name": "htmd-monorepo",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.0",
   "description": "Streamable HTML+Markdown wire format for AI output",
   "license": "MIT",
   "type": "module",
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@changesets/cli": "^2.31.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

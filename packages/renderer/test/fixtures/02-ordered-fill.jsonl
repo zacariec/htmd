@@ -1,0 +1,15 @@
+{"type":"doc-open","seq":0,"id":"doc-02","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"region","seq":2,"id":"$.msg.intro","tag":"div","parent":"$.msg"}
+{"type":"region","seq":3,"id":"$.msg.body","tag":"div","parent":"$.msg"}
+{"type":"region","seq":4,"id":"$.msg.outro","tag":"div","parent":"$.msg"}
+{"type":"stream","seq":5,"target":"$.msg.intro","chunk":"# Plan\n\nThree steps, in order."}
+{"type":"region-done","seq":6,"id":"$.msg.intro"}
+{"type":"stream","seq":7,"target":"$.msg.body","chunk":"1. Collect the data\n"}
+{"type":"stream","seq":8,"target":"$.msg.body","chunk":"2. Normalise the columns\n"}
+{"type":"stream","seq":9,"target":"$.msg.body","chunk":"3. Publish the table\n"}
+{"type":"region-done","seq":10,"id":"$.msg.body"}
+{"type":"stream","seq":11,"target":"$.msg.outro","chunk":"Say *go* and I will start."}
+{"type":"region-done","seq":12,"id":"$.msg.outro"}
+{"type":"region-done","seq":13,"id":"$.msg"}
+{"type":"doc-done","seq":14,"id":"doc-02"}

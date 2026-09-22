@@ -1,5 +1,5 @@
-import { LitElement, css, html } from 'lit';
-import { defineOnce } from './define-once.js';
+import { LitElement, css, html, nothing } from 'lit';
+import type { TemplateResult } from 'lit';
 
 export type ChatMessageAuthor = 'user' | 'agent' | 'system';
 export type ChatMessageStatus = 'streaming' | 'complete' | 'failed';
@@ -40,11 +40,13 @@ export class ChatMessage extends LitElement {
   public status: ChatMessageStatus = 'complete';
   public createdAt: string = '';
 
-  public override render(): unknown {
+  public override render(): TemplateResult {
     return html`
       <header class="meta">
         <span class="author">${this.authorName || this.authorId}</span>
-        <time>${this.createdAt}</time>
+        <time datetime=${this.createdAt.length > 0 ? this.createdAt : nothing}>
+          ${this.createdAt}
+        </time>
       </header>
       <div class="body">
         <slot></slot>
@@ -52,5 +54,3 @@ export class ChatMessage extends LitElement {
     `;
   }
 }
-
-defineOnce('chat-message', ChatMessage);

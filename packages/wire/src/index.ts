@@ -6,8 +6,9 @@ export {
   RegionDoneEvent,
   RegionReplaceEvent,
   DocDoneEvent,
-  ErrorEvent,
+  HtmdErrorEvent,
   WireEvent,
   parseWireEvent,
+  parseWireEventJson,
   safeParseWireEvent,
 } from './events.js';

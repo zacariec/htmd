@@ -1,0 +1,9 @@
+{"type":"doc-open","seq":0,"id":"doc-08","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"Part one of a long answer. "}
+{"type":"stream","seq":3,"target":"$.msg.body","chunk":"Part two arrives before the drop. "}
+{"type":"stream","seq":4,"target":"$.msg.body","chunk":"Part three lands after the reconnect. "}
+{"type":"stream","seq":5,"target":"$.msg.body","chunk":"Part four finishes the paragraph."}
+{"type":"region-done","seq":6,"id":"$.msg.body"}
+{"type":"region-done","seq":7,"id":"$.msg"}
+{"type":"doc-done","seq":8,"id":"doc-08"}

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "jsx": "react-jsx"
+  },
+  "references": [
+    { "path": "../parser" },
+    { "path": "../wire" },
+    { "path": "../elements" },
+    { "path": "../renderer" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "test"]
+}

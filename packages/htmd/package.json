@@ -1,0 +1,48 @@
+{
+  "name": "@zacariec/htmd",
+  "version": "0.1.0-alpha.0",
+  "description": "Streamable HTML+Markdown wire format for AI output — meta package. One install, one import.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/index.browser.js",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": ["./dist/index.browser.js"],
+  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zacariec/htmd.git",
+    "directory": "packages/htmd"
+  },
+  "homepage": "https://github.com/zacariec/htmd#readme",
+  "bugs": {
+    "url": "https://github.com/zacariec/htmd/issues"
+  },
+  "keywords": ["htmd", "ai", "streaming", "markdown", "web-components", "lit"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@zacariec/htmd-elements": "workspace:*",
+    "@zacariec/htmd-parser": "workspace:*",
+    "@zacariec/htmd-renderer": "workspace:*",
+    "@zacariec/htmd-wire": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

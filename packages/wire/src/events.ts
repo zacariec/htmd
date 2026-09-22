@@ -6,10 +6,13 @@ import { z } from 'zod';
  * A `.htmd` document is delivered as a sequence of these events over any
  * order-preserving transport (SSE, WebSocket, etc.). Each event carries a
  * monotonic `seq` per document for resumability.
+ *
+ * Field names are camelCase on the wire (`schemaVersion`, not
+ * `schema_version`).
  */
 
-export const RegionId = z.string().regex(/^\$(\.[^.]+)*$/, {
-  message: 'region id must be a dot-path starting with $',
+export const RegionId = z.string().regex(/^\$(\.[A-Za-z0-9_-]+)*$/, {
+  error: 'region id must be a dot-path of [A-Za-z0-9_-] segments starting with $',
 });
 
 export const DocOpenEvent = z.object({
@@ -54,7 +57,7 @@ export const DocDoneEvent = z.object({
   id: z.string(),
 });
 
-export const ErrorEvent = z.object({
+export const HtmdErrorEvent = z.object({
   type: z.literal('error'),
   seq: z.number().int().nonnegative(),
   region: RegionId.optional(),
@@ -69,7 +72,7 @@ export const WireEvent = z.discriminatedUnion('type', [
   RegionDoneEvent,
   RegionReplaceEvent,
   DocDoneEvent,
-  ErrorEvent,
+  HtmdErrorEvent,
 ]);
 
 export type RegionId = z.output<typeof RegionId>;
@@ -79,13 +82,21 @@ export type StreamEvent = z.output<typeof StreamEvent>;
 export type RegionDoneEvent = z.output<typeof RegionDoneEvent>;
 export type RegionReplaceEvent = z.output<typeof RegionReplaceEvent>;
 export type DocDoneEvent = z.output<typeof DocDoneEvent>;
-export type ErrorEvent = z.output<typeof ErrorEvent>;
+export type HtmdErrorEvent = z.output<typeof HtmdErrorEvent>;
 export type WireEvent = z.output<typeof WireEvent>;
 
 export function parseWireEvent(raw: unknown): WireEvent {
   return WireEvent.parse(raw);
 }
 
-export function safeParseWireEvent(raw: unknown): z.SafeParseReturnType<unknown, WireEvent> {
+export function safeParseWireEvent(raw: unknown): z.ZodSafeParseResult<WireEvent> {
   return WireEvent.safeParse(raw);
+}
+
+/**
+ * Parses one JSON-encoded wire event (one line of a JSONL log, one SSE `data:`
+ * payload). Throws on malformed JSON or a payload that fails validation.
+ */
+export function parseWireEventJson(json: string): WireEvent {
+  return WireEvent.parse(JSON.parse(json) as unknown);
 }

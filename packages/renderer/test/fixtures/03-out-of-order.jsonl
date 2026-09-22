@@ -1,0 +1,13 @@
+{"type":"doc-open","seq":0,"id":"doc-03","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"region","seq":2,"id":"$.msg.intro","tag":"div","parent":"$.msg"}
+{"type":"region","seq":3,"id":"$.msg.body","tag":"div","parent":"$.msg"}
+{"type":"region","seq":4,"id":"$.msg.conclusion","tag":"div","parent":"$.msg"}
+{"type":"stream","seq":5,"target":"$.msg.conclusion","chunk":"**Bottom line:** ship it."}
+{"type":"region-done","seq":6,"id":"$.msg.conclusion"}
+{"type":"stream","seq":7,"target":"$.msg.intro","chunk":"Here is the full reasoning.\n\n"}
+{"type":"region-done","seq":8,"id":"$.msg.intro"}
+{"type":"stream","seq":9,"target":"$.msg.body","chunk":"The numbers support it:\n\n- margin holds\n- churn flat\n- infra amortised"}
+{"type":"region-done","seq":10,"id":"$.msg.body"}
+{"type":"region-done","seq":11,"id":"$.msg"}
+{"type":"doc-done","seq":12,"id":"doc-03"}

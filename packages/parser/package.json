@@ -1,6 +1,6 @@
 {
-  "name": "@htmd/parser",
-  "version": "0.0.0",
+  "name": "@zacariec/htmd-parser",
+  "version": "0.1.0-alpha.0",
   "description": "Parse .htmd source into a typed AST",
   "license": "MIT",
   "type": "module",
@@ -11,13 +11,29 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "README.md"],
+  "sideEffects": false,
+  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zacariec/htmd.git",
+    "directory": "packages/parser"
+  },
+  "homepage": "https://github.com/zacariec/htmd#readme",
+  "bugs": {
+    "url": "https://github.com/zacariec/htmd/issues"
+  },
+  "keywords": ["htmd", "ai", "streaming", "markdown", "parser", "ast"],
   "scripts": {
     "build": "tsc -b",
     "dev": "tsc -b --watch",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 import { LitElement, css, html } from 'lit';
-import { defineOnce } from './define-once.js';
+import type { TemplateResult } from 'lit';
+
+import { HtmdElementsLogger } from './internal/logger.js';
 
 export class CodeBlock extends LitElement {
   public static override styles = css`
@@ -46,24 +48,22 @@ export class CodeBlock extends LitElement {
   public language: string = '';
   public showCopy: boolean = true;
 
-  private handleCopy = async (): Promise<void> => {
+  private readonly handleCopy = async (): Promise<void> => {
     const text = this.textContent ?? '';
     try {
       await navigator.clipboard.writeText(text);
     } catch (error) {
-      console.error('[htmd/code-block] copy failed', error);
+      HtmdElementsLogger.getInstance().error('code-block copy failed', error);
     }
   };
 
-  public override render(): unknown {
+  public override render(): TemplateResult {
     return html`
       <div class="header">
         <span>${this.language || 'code'}</span>
-        ${this.showCopy ? html`<button @click=${this.handleCopy}>copy</button>` : null}
+        ${this.showCopy ? html`<button @click=${this.handleCopy}>copy</button>` : undefined}
       </div>
       <pre><code><slot></slot></code></pre>
     `;
   }
 }
-
-defineOnce('code-block', CodeBlock);

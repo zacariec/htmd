@@ -1,0 +1,58 @@
+{
+  "name": "@zacariec/htmd-react",
+  "version": "0.1.0-alpha.0",
+  "description": "React adapter for .htmd — static <HtmdDoc/> and streaming useHtmdStream() hook",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zacariec/htmd.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/zacariec/htmd#readme",
+  "bugs": {
+    "url": "https://github.com/zacariec/htmd/issues"
+  },
+  "keywords": ["htmd", "ai", "streaming", "react", "hooks"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "dependencies": {
+    "@zacariec/htmd-elements": "workspace:*",
+    "@zacariec/htmd-parser": "workspace:*",
+    "@zacariec/htmd-renderer": "workspace:*",
+    "@zacariec/htmd-wire": "workspace:*"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

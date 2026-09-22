@@ -1,24 +1,32 @@
 import { TokenCursor } from './token-cursor.js';
 import { Tokenizer } from './tokenizer.js';
 import type { ElementOpenToken } from './tokenizer.js';
+import { DiagnosticCode, DiagnosticSeverity } from './types.js';
 import type {
   Diagnostic,
-  Document,
   ElementBlock,
+  HtmdDocument,
+  HtmdNode,
   MarkdownBlock,
-  Node,
+  ParseOptions,
   ParseResult,
 } from './types.js';
+
+interface ParseState {
+  readonly streaming: boolean;
+  pending: boolean;
+}
 
 /**
  * Parse a `.htmd` source string into a typed AST.
  *
  * - Markdown spans are emitted verbatim as `MarkdownBlock` nodes; consumers
- *   render them with their chosen markdown library (marked / remark / etc.).
+ *   render them with a markdown renderer that keeps raw HTML disabled.
  * - Custom-element tags are parsed into `ElementBlock` nodes with attributes
  *   and recursively-parsed children.
  * - Plain HTML tags (no hyphen) are not recognised by the tokenizer; they
- *   remain inside markdown spans and the markdown layer escapes them.
+ *   remain inside markdown spans. Forbidden constructs (`<script>`, `on*=`
+ *   attributes, `javascript:` URLs) surface as error diagnostics.
  *
  * Singleton: `Parser` holds no per-source state. Each call to `parse(source)`
  * constructs a fresh `TokenCursor` and walks it.
@@ -35,19 +43,24 @@ export class Parser {
     return Parser.instance;
   }
 
-  public parse(source: string): ParseResult {
-    const tokens = Tokenizer.getInstance().tokenize(source);
-    const cursor = new TokenCursor(tokens);
-    const diagnostics: Diagnostic[] = [];
-    const nodes = this.parseNodes(source, cursor, undefined, diagnostics);
+  public parse(source: string, options: ParseOptions = {}): ParseResult {
+    const tokenized = Tokenizer.getInstance().tokenize(source, options);
+    const cursor = new TokenCursor(tokenized.tokens);
+    const diagnostics: Diagnostic[] = [...tokenized.diagnostics];
+    const state: ParseState = {
+      streaming: options.streaming === true,
+      pending: tokenized.pending,
+    };
+    const nodes = this.parseNodes(source, cursor, undefined, diagnostics, state);
 
     return {
       document: { nodes, source },
       diagnostics,
+      pending: state.pending,
     };
   }
 
-  public emptyDocument(): Document {
+  public emptyDocument(): HtmdDocument {
     return { nodes: [], source: '' };
   }
 
@@ -56,8 +69,9 @@ export class Parser {
     cursor: TokenCursor,
     closingTag: string | undefined,
     diagnostics: Diagnostic[],
-  ): readonly Node[] {
-    const nodes: Node[] = [];
+    state: ParseState,
+  ): readonly HtmdNode[] {
+    const nodes: HtmdNode[] = [];
 
     while (!cursor.eof()) {
       const token = cursor.peek();
@@ -86,8 +100,15 @@ export class Parser {
           return nodes;
         }
         diagnostics.push({
-          severity: 'warning',
+          severity: DiagnosticSeverity.Warning,
+          code: DiagnosticCode.UnexpectedClosingTag,
           message: `unexpected closing tag </${token.tag}>`,
+          start: token.start,
+          end: token.end,
+        });
+        nodes.push({
+          type: 'markdown',
+          source: source.slice(token.start, token.end),
           start: token.start,
           end: token.end,
         });
@@ -96,12 +117,17 @@ export class Parser {
       }
 
       cursor.advance();
-      nodes.push(this.buildElementNode(source, token, cursor, diagnostics));
+      nodes.push(this.buildElementNode(source, token, cursor, diagnostics, state));
     }
 
     if (closingTag !== undefined) {
+      if (state.streaming) {
+        state.pending = true;
+        return nodes;
+      }
       diagnostics.push({
-        severity: 'warning',
+        severity: DiagnosticSeverity.Warning,
+        code: DiagnosticCode.MissingClosingTag,
         message: `missing closing tag </${closingTag}>`,
         start: source.length,
         end: source.length,
@@ -116,6 +142,7 @@ export class Parser {
     openToken: ElementOpenToken,
     cursor: TokenCursor,
     diagnostics: Diagnostic[],
+    state: ParseState,
   ): ElementBlock {
     if (openToken.selfClosing) {
       return {
@@ -130,7 +157,7 @@ export class Parser {
       };
     }
 
-    const children = this.parseNodes(source, cursor, openToken.tag, diagnostics);
+    const children = this.parseNodes(source, cursor, openToken.tag, diagnostics, state);
     const closingEnd = cursor.lastConsumedEnd();
 
     return {

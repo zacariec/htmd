@@ -1,5 +1,7 @@
 import { LitElement, css, html } from 'lit';
-import { defineOnce } from './define-once.js';
+import type { TemplateResult } from 'lit';
+
+import { sanitizeUrl } from './internal/sanitize-url.js';
 
 export class FilePreview extends LitElement {
   public static override styles = css`
@@ -58,14 +60,19 @@ export class FilePreview extends LitElement {
   public sizeBytes: number = 0;
   public href: string = '';
 
-  public override render(): unknown {
+  public override render(): TemplateResult {
+    const safeHref = this.href.length > 0 ? sanitizeUrl(this.href) : undefined;
     return html`
       <div class="icon">${this.iconLabel()}</div>
       <div class="meta">
         <span class="name">${this.name}</span>
         <span class="size">${this.formatSize(this.sizeBytes)} · ${this.mime}</span>
       </div>
-      ${this.href.length > 0 ? html`<a href=${this.href} download=${this.name}>download</a>` : null}
+      ${
+        safeHref === undefined
+          ? undefined
+          : html`<a href=${safeHref} download=${this.name}>download</a>`
+      }
     `;
   }
 
@@ -92,5 +99,3 @@ export class FilePreview extends LitElement {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 }
-
-defineOnce('file-preview', FilePreview);

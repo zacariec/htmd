@@ -1,0 +1,25 @@
+{"type":"doc-open","seq":0,"id":"doc-09","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent","author-name":"Navigator","status":"streaming"}}
+{"type":"region","seq":2,"id":"$.msg.intro","tag":"div","parent":"$.msg"}
+{"type":"region","seq":3,"id":"$.msg.analysis","tag":"div","parent":"$.msg"}
+{"type":"region","seq":4,"id":"$.msg.artefacts","tag":"div","parent":"$.msg"}
+{"type":"region","seq":5,"id":"$.msg.next","tag":"div","parent":"$.msg"}
+{"type":"stream","seq":6,"target":"$.msg.intro","chunk":"# Q4 Revenue Review\n\nFull pass over the quarter"}
+{"type":"stream","seq":7,"target":"$.msg.intro","chunk":", with artefacts attached below.\n"}
+{"type":"stream","seq":8,"target":"$.msg.analysis","chunk":"## What the data says\n\n"}
+{"type":"stream","seq":9,"target":"$.msg.analysis","chunk":"- Revenue **up 12%** QoQ\n- Churn flat at 2.1%\n- One outlier week (w49), traced to a billing bug\n\n"}
+{"type":"stream","seq":10,"target":"$.msg.analysis","chunk":"The billing fix, for reference:\n\n```ts\nconst corrected = invoices.filter((invoice) => !invoice.voided);\n```\n\n"}
+{"type":"stream","seq":11,"target":"$.msg.analysis","chunk":"<data-table src=\"/api/sales/q4\"/>\n"}
+{"type":"stream","seq":12,"target":"$.msg.artefacts","chunk":"## Artefacts\n\n"}
+{"type":"stream","seq":13,"target":"$.msg.artefacts","chunk":"<image-card src=\"/charts/q4-revenue.png\" alt=\"Q4 revenue by week\" width=\"1200\" height=\"675\" caption=\"Weekly revenue, w40-w52\"/>\n\n"}
+{"type":"stream","seq":14,"target":"$.msg.artefacts","chunk":"<file-preview name=\"q4-full-report.pdf\" mime=\"application/pdf\" size-bytes=\"482133\" href=\"/files/q4-full-report.pdf\"/>\n\n"}
+{"type":"stream","seq":15,"target":"$.msg.artefacts","chunk":"<htmd-fragment kind=\"highlights\">{\"tag\":\"div\",\"class\":\"highlights\",\"children\":[{\"tag\":\"h4\",\"text\":\"Highlights\"},{\"tag\":\"ul\",\"children\":[{\"tag\":\"li\",\"text\":\"Best week: w51\"},{\"tag\":\"li\",\"text\":\"Worst week: w49\"},{\"tag\":\"li\",\"text\":\"Recovery: +9% after fix\"}]}]}</htmd-fragment>\n"}
+{"type":"region-done","seq":16,"id":"$.msg.intro"}
+{"type":"region-done","seq":17,"id":"$.msg.analysis"}
+{"type":"region-done","seq":18,"id":"$.msg.artefacts"}
+{"type":"stream","seq":19,"target":"$.msg.next","chunk":"## Next\n\nPick a direction:\n\n"}
+{"type":"stream","seq":20,"target":"$.msg.next","chunk":"<choice-group name=\"direction\"><choice-item value=\"forecast\">Build the Q1 forecast</choice-item><choice-item value=\"deep-dive\">Deep-dive on w49</choice-item></choice-group>\n\n"}
+{"type":"stream","seq":21,"target":"$.msg.next","chunk":"<refine-prompt target=\"$.msg.analysis\"></refine-prompt>"}
+{"type":"region-done","seq":22,"id":"$.msg.next"}
+{"type":"region-done","seq":23,"id":"$.msg"}
+{"type":"doc-done","seq":24,"id":"doc-09"}

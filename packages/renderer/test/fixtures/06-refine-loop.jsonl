@@ -1,0 +1,12 @@
+{"type":"doc-open","seq":0,"id":"doc-06","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"Draft copy:\n\n> Fast. Simple. Done.\n\n"}
+{"type":"stream","seq":3,"target":"$.msg.body","chunk":"<refine-prompt target=\"$.msg.body\"></refine-prompt>"}
+{"type":"region-done","seq":4,"id":"$.msg.body"}
+{"type":"region-replace","seq":5,"id":"$.msg.body","body":"Refined copy:\n\n> Ship fast. Stay simple.\n\n<refine-prompt target=\"$.msg.body\"></refine-prompt>"}
+{"type":"region-done","seq":6,"id":"$.msg.body"}
+{"type":"region","seq":7,"id":"$.msg.followup","tag":"div","parent":"$.msg"}
+{"type":"stream","seq":8,"target":"$.msg.followup","chunk":"Applied your note about tone — shorter, more direct."}
+{"type":"region-done","seq":9,"id":"$.msg.followup"}
+{"type":"region-done","seq":10,"id":"$.msg"}
+{"type":"doc-done","seq":11,"id":"doc-06"}

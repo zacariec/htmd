@@ -1,5 +1,7 @@
-import '@htmd/elements';
-import { Parser } from '@htmd/parser';
+import { HtmdElementEvents, registerHtmdElements } from '@zacariec/htmd-elements';
+import { renderHtmdSource } from '@zacariec/htmd-renderer';
+
+registerHtmdElements();
 
 const SAMPLE = `Looking at the data now.
 
@@ -19,19 +21,12 @@ if (stage === null) {
   throw new Error('missing #stage');
 }
 
-const { document: parsed, diagnostics } = Parser.getInstance().parse(SAMPLE);
-
-console.info('parsed:', parsed);
-if (diagnostics.length > 0) {
-  console.warn('diagnostics:', diagnostics);
+const result = renderHtmdSource(stage, SAMPLE);
+if (result.diagnostics.length > 0) {
+  console.info('htmd diagnostics:', result.diagnostics);
 }
 
-// Naive renderer for the example: write the source as innerHTML so the browser
-// upgrades custom elements. A real consumer would walk the AST, render
-// markdown spans via marked/remark, and mount element nodes individually.
-stage.innerHTML = SAMPLE;
-
-stage.addEventListener('choice', (event) => {
+stage.addEventListener(HtmdElementEvents.Choice, (event) => {
   const detail = (event as CustomEvent<{ name: string; value: string }>).detail;
   console.info('choice selected:', detail);
 });

@@ -1,0 +1,21 @@
+{"type":"doc-open","seq":0,"id":"doc-10","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent","author-name":"Navigator","status":"streaming","created-at":"2026-08-01T02:00:00Z"}}
+{"type":"region","seq":2,"id":"$.msg.body","tag":"div","parent":"$.msg"}
+{"type":"stream","seq":3,"target":"$.msg.body","chunk":"# Every element\n\nOne message, every element. Handy for eyeballing the visual system.\n\n"}
+{"type":"stream","seq":4,"target":"$.msg.body","chunk":"## Code\n\nA fenced block becomes a `<code-block>` with syntax hint + copy button.\n\n"}
+{"type":"stream","seq":5,"target":"$.msg.body","chunk":"<code-block language=\"ts\">const total = orders.reduce((sum, order) => sum + order.cents, 0);\nreturn total / 100;</code-block>\n\n"}
+{"type":"stream","seq":6,"target":"$.msg.body","chunk":"## Image\n\nReserved aspect ratio so the layout doesn't shift.\n\n"}
+{"type":"stream","seq":7,"target":"$.msg.body","chunk":"<image-card src=\"/charts/q4-revenue.png\" alt=\"Q4 revenue by week\" width=\"1200\" height=\"675\" caption=\"Weekly revenue, w40-w52\"/>\n\n"}
+{"type":"stream","seq":8,"target":"$.msg.body","chunk":"## Data table\n\nHydrates from a JSON endpoint. The demo stubs `fetch` — in the real app the client caches it.\n\n"}
+{"type":"stream","seq":9,"target":"$.msg.body","chunk":"<data-table src=\"/api/sales/q4\"/>\n\n"}
+{"type":"stream","seq":10,"target":"$.msg.body","chunk":"## File\n\nOne-line preview with a mime icon and a download.\n\n"}
+{"type":"stream","seq":11,"target":"$.msg.body","chunk":"<file-preview name=\"q4-full-report.pdf\" mime=\"application/pdf\" size-bytes=\"482133\" href=\"/files/q4-full-report.pdf\"/>\n\n"}
+{"type":"stream","seq":12,"target":"$.msg.body","chunk":"## Structured highlights\n\nA `<htmd-fragment>` renders a JSON tree through the allowlist. No `eval`, safe interpolation.\n\n"}
+{"type":"stream","seq":13,"target":"$.msg.body","chunk":"<htmd-fragment kind=\"highlights\">{\"tag\":\"div\",\"class\":\"highlights\",\"children\":[{\"tag\":\"h4\",\"text\":\"Highlights\"},{\"tag\":\"ul\",\"children\":[{\"tag\":\"li\",\"text\":\"Best week: w51\"},{\"tag\":\"li\",\"text\":\"Worst week: w49\"},{\"tag\":\"li\",\"text\":\"Recovery: +9% after fix\"}]}]}</htmd-fragment>\n\n"}
+{"type":"stream","seq":14,"target":"$.msg.body","chunk":"## Choice\n\n"}
+{"type":"stream","seq":15,"target":"$.msg.body","chunk":"<choice-group name=\"next\"><choice-item value=\"dig\">Dig into the top performer</choice-item><choice-item value=\"export\">Export the table</choice-item><choice-item value=\"another\">Show a different cut</choice-item></choice-group>\n\n"}
+{"type":"stream","seq":16,"target":"$.msg.body","chunk":"## Refine\n\n"}
+{"type":"stream","seq":17,"target":"$.msg.body","chunk":"<refine-prompt target=\"$.msg.body\" placeholder=\"Ask a follow-up on this section…\"></refine-prompt>"}
+{"type":"region-done","seq":18,"id":"$.msg.body"}
+{"type":"region-done","seq":19,"id":"$.msg"}
+{"type":"doc-done","seq":20,"id":"doc-10"}

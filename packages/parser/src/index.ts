@@ -1,9 +1,11 @@
+export { DiagnosticCode, DiagnosticSeverity } from './types.js';
 export type {
   Diagnostic,
-  Document,
   ElementBlock,
+  HtmdDocument,
+  HtmdNode,
   MarkdownBlock,
-  Node,
+  ParseOptions,
   ParseResult,
 } from './types.js';
 export { Parser } from './parser.js';
@@ -13,7 +15,6 @@ export type {
   ElementOpenToken,
   MarkdownToken,
   Token,
+  TokenizeResult,
 } from './tokenizer.js';
-export { Cursor } from './cursor.js';
-export { TokenCursor } from './token-cursor.js';
 export { isCustomElementTag } from './is-custom-element-tag.js';

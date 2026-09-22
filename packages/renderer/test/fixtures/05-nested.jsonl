@@ -1,0 +1,10 @@
+{"type":"doc-open","seq":0,"id":"doc-05","schemaVersion":"0.1"}
+{"type":"region","seq":1,"id":"$.msg","tag":"chat-message","attrs":{"author":"agent","author-name":"Navigator"}}
+{"type":"stream","seq":2,"target":"$.msg.body","chunk":"Here is the summary panel:\n\n"}
+{"type":"region","seq":3,"id":"$.msg.panel","tag":"section","parent":"$.msg"}
+{"type":"stream","seq":4,"target":"$.msg.panel","chunk":"<htmd-fragment kind=\"card\">"}
+{"type":"stream","seq":5,"target":"$.msg.panel","chunk":"{\"tag\":\"div\",\"class\":\"card\",\"children\":[{\"tag\":\"h3\",\"text\":\"Q4 Summary\"},{\"tag\":\"ul\",\"children\":[{\"tag\":\"li\",\"text\":\"Revenue up 12%\"},{\"tag\":\"li\",\"text\":\"Churn flat\"}]}]}"}
+{"type":"stream","seq":6,"target":"$.msg.panel","chunk":"</htmd-fragment>"}
+{"type":"region-done","seq":7,"id":"$.msg.panel"}
+{"type":"region-done","seq":8,"id":"$.msg"}
+{"type":"doc-done","seq":9,"id":"doc-05"}
