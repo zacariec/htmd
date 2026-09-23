@@ -92,3 +92,34 @@ A component version this host doesn't support:
 
 That's everything. Press **Play** again with **Random** chunking: the final document is always the same.
 `;
+
+const LONG_SECTION = (index: number): string => `## Week ${index + 1} review
+
+Revenue grew **${(index % 9) + 3}%** week over week, driven by *enterprise* renewals. See [the weekly report](https://example.com/reports/${index + 1}) for the breakdown.
+
+- Churn held at ${(2 + (index % 5) / 10).toFixed(1)}%
+- Support tickets fell by ${index % 7} percent
+- One outlier account, traced to a **billing** retry
+
+| Metric | Value |
+| ------ | ----: |
+| Orders | ${1200 + index * 7} |
+| Refunds | ${index % 13} |
+
+${index % 4 === 3 ? '```ts\nconst weekly = orders.filter((order) => order.week === current);\n```\n\n' : ''}`;
+
+/**
+ * A long single-region answer (about 40 KB). Finished Markdown blocks render
+ * once, so the cost per chunk stays flat however long it grows.
+ */
+export const LONG_ANSWER_HTMD = `# Year in review
+
+Pick a focus now; the choice survives the whole stream.
+
+<choice-group name="focus">
+  <choice-item value="revenue">Revenue</choice-item>
+  <choice-item value="churn">Churn</choice-item>
+</choice-group>
+
+${Array.from({ length: 80 }, (_, index) => LONG_SECTION(index)).join('')}That's the full year.
+`;

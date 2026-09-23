@@ -2,8 +2,10 @@ import {
   ComponentEvents,
   MAX_TABLE_ROWS,
   baseCatalog,
+  captureInteractionState,
   createHost,
   provideHtmdHost,
+  restoreInteractionState,
 } from '@htmdjs/contracts';
 import type { ChoiceDetail, DataRequest, HtmdHostOptions, RefineDetail } from '@htmdjs/contracts';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +13,7 @@ import type { ChatMessage } from '../src/chat-message.js';
 import type { ChoiceGroup } from '../src/choice-group.js';
 import type { ChoiceItem } from '../src/choice-item.js';
 import type { CodeBlock } from '../src/code-block.js';
+import { completeRefine } from '../src/complete-refine.js';
 import type { DataTable } from '../src/data-table.js';
 import type { FilePreview } from '../src/file-preview.js';
 import type { ImageCard } from '../src/image-card.js';
@@ -157,6 +160,22 @@ describe('image-card', () => {
     expect(placeholder?.getAttribute('aria-label')).toBe('Weekly revenue');
     expect(placeholder?.textContent).toContain('Weekly revenue');
   });
+
+  it('shows the alt text when the image fails to load, and retries on a new src', async () => {
+    const card = await mount<ImageCard>('image-card', { src: '/broken.png', alt: 'Chart' });
+
+    card.shadowRoot?.querySelector('img')?.dispatchEvent(new Event('error'));
+    await card.updateComplete;
+
+    expect(card.shadowRoot?.querySelector('img')).toBeNull();
+    expect(card.shadowRoot?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
+      'Chart',
+    );
+
+    card.src = '/fixed.png';
+    await card.updateComplete;
+    expect(card.shadowRoot?.querySelector('img')?.getAttribute('src')).toBe(absolute('/fixed.png'));
+  });
 });
 
 describe('choice-group', () => {
@@ -266,6 +285,29 @@ describe('choice-group', () => {
     expect(first?.selected).toBe(true);
     expect(late.selected).toBe(false);
   });
+
+  it('restores a captured selection into fresh elements without emitting choice', async () => {
+    const markup = `
+      <div data-htmd-region="$.answer">
+        <choice-group name="q4">
+          <choice-item value="a">A</choice-item>
+          <choice-item value="b">B</choice-item>
+        </choice-group>
+      </div>
+    `;
+    const before = await mountGroup(markup);
+    button(before[1]).click();
+    const saved = JSON.parse(JSON.stringify(captureInteractionState(document.body))) as unknown;
+
+    const after = await mountGroup(markup);
+    const emitted = choices();
+    expect(restoreInteractionState(document.body, saved)).toBe(1);
+    await Promise.all(after.map((item) => item.updateComplete));
+
+    expect(after.map((item) => item.selected)).toEqual([false, true]);
+    expect(after.map((item) => button(item).getAttribute('tabindex'))).toEqual(['-1', '0']);
+    expect(emitted).toEqual([]);
+  });
 });
 
 describe('refine-prompt', () => {
@@ -322,6 +364,51 @@ describe('refine-prompt', () => {
 
     expect(prompt.shadowRoot?.querySelector('button')?.disabled).toBe(false);
     expect(prompt.shadowRoot?.querySelector('textarea')?.value).toBe('');
+  });
+
+  it('completeRefine re-enables the originating prompt after dispatch has ended', async () => {
+    const prompt = await mount<RefinePrompt>('refine-prompt', { target: '$.x' });
+    const events: Event[] = [];
+    document.addEventListener(ComponentEvents.Refine, (event) => events.push(event), {
+      once: true,
+    });
+    await submit(prompt, 'again');
+    const [event] = events;
+    if (event === undefined) {
+      throw new Error('refine was not emitted');
+    }
+
+    expect(completeRefine(new CustomEvent(ComponentEvents.Refine))).toBe(false);
+    expect(completeRefine(event, { clearInput: true })).toBe(true);
+    await prompt.updateComplete;
+
+    expect(prompt.shadowRoot?.querySelector('button')?.disabled).toBe(false);
+    expect(prompt.shadowRoot?.querySelector('textarea')?.value).toBe('');
+  });
+
+  it('restores a captured draft into a fresh element without submitting', async () => {
+    const region = document.createElement('div');
+    region.setAttribute('data-htmd-region', '$.msg');
+    document.body.appendChild(region);
+    const prompt = await mount<RefinePrompt>('refine-prompt', { target: '$.msg' }, region);
+    const textarea = prompt.shadowRoot?.querySelector('textarea');
+    if (textarea === null || textarea === undefined) {
+      throw new Error('refine-prompt did not render its textarea');
+    }
+    textarea.value = 'make it shorter';
+    const saved = JSON.parse(JSON.stringify(captureInteractionState(document.body))) as unknown;
+
+    region.innerHTML = '<refine-prompt target="$.msg"></refine-prompt>';
+    const fresh = region.querySelector('refine-prompt') as RefinePrompt;
+    const listener = vi.fn();
+    document.addEventListener(ComponentEvents.Refine, listener, { once: true });
+    // Restored before the fresh element has rendered, as a renderer would.
+    expect(restoreInteractionState(document.body, saved)).toBe(1);
+    await fresh.updateComplete;
+
+    expect(fresh.shadowRoot?.querySelector('textarea')?.value).toBe('make it shorter');
+    expect(fresh.shadowRoot?.querySelector('button')?.disabled).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
   });
 });
 

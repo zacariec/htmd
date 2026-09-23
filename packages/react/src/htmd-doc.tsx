@@ -1,12 +1,13 @@
 import { defaultHost } from '@htmdjs/contracts';
 import type { HtmdDiagnostic, HtmdHost } from '@htmdjs/contracts';
-import { renderHtmdSource } from '@htmdjs/renderer';
+import { renderHtmdSource, renderHtmdToString } from '@htmdjs/renderer';
 import type { JSX } from 'react';
-import { type HTMLAttributes, useEffect, useRef } from 'react';
+import { type HTMLAttributes, useEffect, useRef, useState } from 'react';
 
 import { ensureHtmdElementsRegistered } from './register.js';
 
-export interface HtmdDocProps extends HTMLAttributes<HTMLDivElement> {
+export interface HtmdDocProps
+  extends Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'dangerouslySetInnerHTML'> {
   /** The `.htmd` source to render. */
   readonly source: string;
   /**
@@ -14,7 +15,7 @@ export interface HtmdDocProps extends HTMLAttributes<HTMLDivElement> {
    * `defaultHost`. Keep its identity stable: a new host re-renders the document.
    */
   readonly host?: HtmdHost;
-  /** Called with parser and contract diagnostics on every render pass. */
+  /** Called with parser and contract diagnostics on every client render pass. */
   readonly onDiagnostics?: (diagnostics: ReadonlyArray<HtmdDiagnostic>) => void;
 }
 
@@ -22,12 +23,16 @@ export interface HtmdDocProps extends HTMLAttributes<HTMLDivElement> {
  * `<HtmdDoc>` — renders a static `.htmd` string into a Lit tree mounted in the
  * React tree. Re-renders when `source` or `host` changes.
  *
- * The container `<div>` is React-managed; its interior DOM is
- * materializer-managed. React never sees the internal children.
+ * On the server (and in the first client render) the container holds the
+ * `renderHtmdToString` markup, so server-rendered pages show the document
+ * before hydration. After mount the materializer owns the container's
+ * interior; React never touches it again because the initial HTML is
+ * computed once and its value never changes.
  */
 export function HtmdDoc(props: HtmdDocProps): JSX.Element {
   const { source, host = defaultHost, onDiagnostics, ...rest } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [initialHtml] = useState(() => ({ __html: renderHtmdToString(source, { host }).html }));
 
   useEffect(() => {
     ensureHtmdElementsRegistered();
@@ -39,5 +44,14 @@ export function HtmdDoc(props: HtmdDocProps): JSX.Element {
     onDiagnostics?.(result.diagnostics);
   }, [source, host, onDiagnostics]);
 
-  return <div ref={containerRef} {...rest} />;
+  return (
+    <div
+      ref={containerRef}
+      {...rest}
+      // Renderer output, not source: Markdown raw HTML is escaped and attribute values are escaped.
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered initial markup for hydration.
+      dangerouslySetInnerHTML={initialHtml}
+      suppressHydrationWarning
+    />
+  );
 }

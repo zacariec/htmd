@@ -1,6 +1,18 @@
-import { ComponentEvents, baseCatalog } from '@htmdjs/contracts';
-import type { ChoiceDetail, HtmdDiagnostic, HtmdHost, RefineDetail } from '@htmdjs/contracts';
-import type { RefinePrompt } from '@htmdjs/elements';
+import {
+  ComponentEvents,
+  baseCatalog,
+  captureInteractionState,
+  modelInstructions,
+  restoreInteractionState,
+} from '@htmdjs/contracts';
+import type {
+  ChoiceDetail,
+  HtmdDiagnostic,
+  HtmdHost,
+  InteractionSnapshot,
+  RefineDetail,
+} from '@htmdjs/contracts';
+import { completeRefine } from '@htmdjs/elements';
 import { DEFAULT_RENDER_LIMITS, RegionTreeRenderer, RendererEvents } from '@htmdjs/renderer';
 import type { RegionUpdatedDetail, RenderLimits, RendererErrorDetail } from '@htmdjs/renderer';
 import { WireWriter } from '@htmdjs/wire';
@@ -9,7 +21,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 
 import { createPlaygroundHost } from './host.js';
 import type { PlaygroundPermissions } from './host.js';
-import { KITCHEN_SINK_HTMD } from './kitchen-sink-sample.js';
+import { KITCHEN_SINK_HTMD, LONG_ANSWER_HTMD } from './kitchen-sink-sample.js';
 
 type ChunkMode = 'char' | 'word' | 'line' | 'random';
 type Status = 'idle' | 'playing' | 'paused' | 'done' | 'failed';
@@ -21,6 +33,8 @@ const RANDOM_MAX_CHUNK = 16;
 const TIGHT_REGION_BYTES = 2048;
 const HOST_ACK_MS = 1200;
 const LOG_SIZE = 40;
+/** Chunks averaged for the render-time readout. */
+const TIMING_WINDOW = 50;
 
 const CHUNK_MODES: Readonly<Record<ChunkMode, string>> = {
   char: 'By character',
@@ -117,10 +131,13 @@ export function KitchenSinkTab(): JSX.Element {
   const [xray, setXray] = useState(false);
   const [log, setLog] = useState<readonly LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<readonly HtmdDiagnostic[]>([]);
+  const [renderMs, setRenderMs] = useState<number | undefined>(undefined);
+  const [saved, setSaved] = useState<InteractionSnapshot | undefined>(undefined);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<Session | undefined>(undefined);
   const logIdRef = useRef(0);
+  const timingsRef = useRef<number[]>([]);
   const deferredSource = useDeferredValue(source);
 
   const host: HtmdHost = useMemo(
@@ -131,6 +148,7 @@ export function KitchenSinkTab(): JSX.Element {
       ),
     [offered, permissions],
   );
+  const instructions = useMemo(() => modelInstructions(host.components), [host]);
   const limits = LIMITS[limitPreset].limits;
 
   // Callbacks read the latest settings without restarting the stream.
@@ -156,6 +174,8 @@ export function KitchenSinkTab(): JSX.Element {
       }
       const settings = latest.current;
       container.replaceChildren();
+      timingsRef.current = [];
+      setRenderMs(undefined);
       const renderer = new RegionTreeRenderer(container, {
         host: settings.host,
         limits: settings.limits,
@@ -216,7 +236,12 @@ export function KitchenSinkTab(): JSX.Element {
         return false;
       }
       const text = chunk ?? session.chunks[session.index] ?? '';
+      const started = performance.now();
       const accepted = session.renderer.apply(session.writer.stream(REGION, text));
+      const timings = timingsRef.current;
+      timings.push(performance.now() - started);
+      timings.splice(0, Math.max(0, timings.length - TIMING_WINDOW));
+      setRenderMs(timings.reduce((total, ms) => total + ms, 0) / timings.length);
       if (!accepted) {
         session.finished = true;
         syncView(session);
@@ -313,10 +338,14 @@ export function KitchenSinkTab(): JSX.Element {
     const onRefine = (event: Event): void => {
       const detail = (event as CustomEvent<RefineDetail>).detail;
       addLog('refine', `refine ${detail.target}: "${detail.prompt}"`);
-      const prompt = event.target as RefinePrompt;
       window.setTimeout(() => {
-        prompt.reset(true);
-        addLog('host', `Host finished the revision request for ${detail.target}; prompt reset.`);
+        const reset = completeRefine(event, { clearInput: true });
+        addLog(
+          'host',
+          reset
+            ? `Host finished the revision request for ${detail.target}; prompt reset.`
+            : `Host finished ${detail.target}, but the prompt is gone.`,
+        );
       }, HOST_ACK_MS);
     };
     container.addEventListener(ComponentEvents.Choice, onChoice);
@@ -342,6 +371,25 @@ export function KitchenSinkTab(): JSX.Element {
   const togglePermission = (key: keyof PlaygroundPermissions, label: string): void => {
     addLog('host', `${label} ${permissions[key] ? 'refused' : 'allowed'}; re-rendered.`);
     setPermissions((previous) => ({ ...previous, [key]: !previous[key] }));
+  };
+
+  const saveInteraction = (): void => {
+    const container = containerRef.current;
+    if (container === null) {
+      return;
+    }
+    const snapshot = captureInteractionState(container);
+    setSaved(snapshot);
+    addLog('host', `Saved interaction state for ${snapshot.components.length} component(s).`);
+  };
+
+  const restoreInteraction = (): void => {
+    const container = containerRef.current;
+    if (container === null || saved === undefined) {
+      return;
+    }
+    const restored = restoreInteractionState(container, saved);
+    addLog('host', `Restored ${restored} component(s) from the saved state.`);
   };
 
   return (
@@ -386,6 +434,23 @@ export function KitchenSinkTab(): JSX.Element {
                 {speed.label}
               </option>
             ))}
+          </select>
+          <select
+            aria-label="Document"
+            value={
+              source === LONG_ANSWER_HTMD ? 'long' : source === KITCHEN_SINK_HTMD ? 'sink' : ''
+            }
+            onChange={(event) =>
+              setSource(event.target.value === 'long' ? LONG_ANSWER_HTMD : KITCHEN_SINK_HTMD)
+            }
+          >
+            <option value="sink">Kitchen sink</option>
+            <option value="long">
+              Long answer ({Math.round(LONG_ANSWER_HTMD.length / 1000)} KB)
+            </option>
+            <option value="" disabled>
+              Edited
+            </option>
           </select>
         </div>
 
@@ -452,6 +517,15 @@ export function KitchenSinkTab(): JSX.Element {
               Untick Data, Images, or Links: tables block, images show alt text, links vanish.
             </li>
             <li>Stream by character at Crawl and watch bold, links, and tables arrive.</li>
+            <li>
+              Pick the long answer and play it Fast: the render time per chunk stays flat, because
+              finished Markdown blocks render once.
+            </li>
+            <li>
+              Pick a choice and type a draft, press Save, then Reset and Skip to end: Restore brings
+              both back.
+            </li>
+            <li>Untick components: the model instructions below change to match.</li>
             <li>Turn on X-ray to see regions, pending state, placeholders, and fallbacks.</li>
             <li>Pick Tight limits: the stream is rejected and the document closes.</li>
             <li>Edit the source; the render updates. Press Play to stream your edit.</li>
@@ -478,8 +552,22 @@ export function KitchenSinkTab(): JSX.Element {
             chunk {progress.index} / {progress.total}
           </span>
           {pending ? <span className="badge">pending syntax</span> : null}
+          {renderMs === undefined ? null : (
+            <span className="frame">{renderMs.toFixed(2)} ms per chunk</span>
+          )}
         </div>
         <div className="render sink-render" data-xray={xray} ref={containerRef} />
+        <div className="controls state-controls">
+          <button type="button" onClick={saveInteraction}>
+            Save interaction
+          </button>
+          <button type="button" onClick={restoreInteraction} disabled={saved === undefined}>
+            Restore interaction
+          </button>
+          {saved === undefined ? null : (
+            <span className="frame">{JSON.stringify(saved).length} bytes saved</span>
+          )}
+        </div>
 
         <div className="sink-panels">
           <div className="event-log">
@@ -513,6 +601,12 @@ export function KitchenSinkTab(): JSX.Element {
               </ol>
             )}
           </div>
+          <details className="event-log instructions">
+            <summary>
+              <h3>Model instructions for this host</h3>
+            </summary>
+            <pre>{instructions}</pre>
+          </details>
         </div>
       </section>
     </>

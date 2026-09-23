@@ -10,20 +10,26 @@ import type {
 import { Parser } from '@htmdjs/parser';
 import type { ElementBlock, HtmdDocument, HtmdNode } from '@htmdjs/parser';
 
-import { renderMarkdown } from './markdown.js';
-import { provisionalMarkdown } from './streaming-markdown.js';
+import {
+  markdownNodes,
+  reconcileAttrs,
+  reconcileDom,
+  rememberSourceAttributes,
+} from './dom-reconcile.js';
+import { MarkdownBlocks } from './markdown-blocks.js';
 
 /**
  * AST → DOM materializer — the single code path for turning parsed `.htmd`
  * nodes into live DOM. Used by the static render helper and by the streaming
  * `RegionTreeRenderer` (which re-materializes one region per chunk).
  *
- * Markdown blocks render through `renderMarkdown` (raw HTML escaped). While
- * streaming, the frontier — the last Markdown node, including the last child
- * of a component still streaming — renders as provisional Markdown: open
- * inline syntax is completed and ambiguous syntax withheld, so readers never
- * see markers that later vanish. Element blocks resolve against the host's
- * component catalog:
+ * Markdown nodes render through `MarkdownBlocks`: each finished top-level
+ * Markdown block becomes HTML and DOM once, and only the last block renders
+ * again as text arrives. While streaming, the frontier — the last Markdown
+ * node, including the last child of a component still streaming — renders as
+ * provisional Markdown: open inline syntax is completed and ambiguous syntax
+ * withheld, so readers never see markers that later vanish. Element blocks
+ * resolve against the host's component catalog:
  *
  * - `render`: a real element with validated, declared attributes only. The
  *   custom-element registry upgrades it. Children follow the contract.
@@ -68,10 +74,11 @@ interface RenderedBlock {
   catalog: ComponentCatalog;
   /** Contract diagnostics of this block's subtree, reused while it is unchanged. */
   diagnostics: readonly ContractDiagnostic[];
+  /** Rendered Markdown blocks, reused across updates of a Markdown node. */
+  markdown: MarkdownBlocks | undefined;
 }
 
 const renderedBlocks = new WeakMap<Element, RenderedBlock[]>();
-const sourceAttributes = new WeakMap<Element, Readonly<Record<string, string>>>();
 
 /**
  * Reconcile positional source blocks, retaining live elements and their state.
@@ -188,21 +195,27 @@ function renderBlock(
 ): RenderedBlock {
   const catalog = host.components;
   if (node.type === 'markdown') {
-    const view = frontier ? provisionalMarkdown(node.source) : undefined;
-    const incoming = markdownNodes(target, view?.source ?? node.source);
-    const dom =
-      previous?.kind === 'markdown'
-        ? reconcileDom(target, previous.dom, incoming, cursor)
-        : replaceDom(target, previous, incoming, cursor);
+    // A Markdown node reuses its finished blocks; only changed blocks render again.
+    const last = previous?.dom.at(-1);
+    const end = last === undefined ? cursor : last.nextSibling;
+    let markdown = previous?.kind === 'markdown' ? previous.markdown : undefined;
+    if (markdown === undefined) {
+      for (const child of previous?.dom ?? []) {
+        target.removeChild(child);
+      }
+      markdown = new MarkdownBlocks();
+    }
+    const provisional = markdown.render(target, node.source, frontier, end);
     return {
       node,
       kind: 'markdown',
-      dom,
+      dom: markdown.nodes(),
       streaming,
       frontier,
-      provisional: view?.provisional === true,
+      provisional,
       catalog,
       diagnostics: [],
+      markdown,
     };
   }
 
@@ -225,7 +238,7 @@ function renderBlock(
         for (const [name, value] of Object.entries(resolution.attrs)) {
           element.setAttribute(name, value);
         }
-        sourceAttributes.set(element, sourceOwned(resolution.contract, resolution.attrs));
+        rememberSourceAttributes(element, sourceOwned(resolution.contract, resolution.attrs));
       } else {
         reconcileAttrs(element, sourceOwned(resolution.contract, resolution.attrs));
       }
@@ -277,6 +290,7 @@ function renderBlock(
     provisional,
     catalog,
     diagnostics,
+    markdown: undefined,
   };
 }
 
@@ -363,110 +377,6 @@ function sourceOwned(
     }
   }
   return owned;
-}
-
-function markdownNodes(target: Element, source: string): Node[] {
-  if (source.trim().length === 0) {
-    return [];
-  }
-  const template = target.ownerDocument.createElement('template');
-  template.innerHTML = renderMarkdown(source);
-  const nodes = Array.from(template.content.childNodes);
-  for (const node of nodes) {
-    rememberMarkdownAttrs(node);
-  }
-  return nodes;
-}
-
-function rememberMarkdownAttrs(node: Node): void {
-  if (node.nodeType !== 1) {
-    return;
-  }
-  const element = node as Element;
-  sourceAttributes.set(
-    element,
-    Object.fromEntries(Array.from(element.attributes, (attr) => [attr.name, attr.value])),
-  );
-  for (const child of element.childNodes) {
-    rememberMarkdownAttrs(child);
-  }
-}
-
-/** Diff safe Markdown DOM without detaching matching siblings or descendants. */
-function reconcileDom(
-  target: Element,
-  current: Node[],
-  incoming: Node[],
-  start: Node | null,
-): Node[] {
-  let cursor = start;
-  let i = 0;
-  for (const next of incoming) {
-    const previous = current[i];
-    if (
-      previous !== undefined &&
-      previous.nodeType === next.nodeType &&
-      previous.nodeName === next.nodeName
-    ) {
-      if (previous.nodeType === 1) {
-        const element = previous as Element;
-        const nextElement = next as Element;
-        reconcileAttrs(element, sourceAttributes.get(nextElement) ?? {});
-        reconcileDom(
-          element,
-          Array.from(element.childNodes),
-          Array.from(nextElement.childNodes),
-          element.firstChild,
-        );
-      } else if (previous.nodeValue !== next.nodeValue) {
-        previous.nodeValue = next.nodeValue;
-      }
-      incoming[i] = previous;
-      cursor = previous.nextSibling;
-    } else {
-      target.insertBefore(next, cursor);
-      if (previous !== undefined) {
-        cursor = previous.nextSibling;
-        target.removeChild(previous);
-      }
-    }
-    i += 1;
-  }
-  for (let index = incoming.length; index < current.length; index += 1) {
-    const child = current[index];
-    if (child !== undefined) target.removeChild(child);
-  }
-  return incoming;
-}
-
-/**
- * Applies source deltas only: attributes the source previously set and no
- * longer sets are removed, changed ones are updated. Attributes the source
- * never owned (reflected or runtime state) are left alone.
- */
-function reconcileAttrs(element: Element, attrs: Readonly<Record<string, string>>): void {
-  const previous = sourceAttributes.get(element);
-  if (previous !== undefined) {
-    for (const name of Object.keys(previous)) {
-      if (
-        !name.toLowerCase().startsWith('on') &&
-        !Object.hasOwn(attrs, name) &&
-        element.hasAttribute(name)
-      ) {
-        element.removeAttribute(name);
-      }
-    }
-  }
-  for (const [name, value] of Object.entries(attrs)) {
-    if (
-      !name.toLowerCase().startsWith('on') &&
-      (previous === undefined || previous[name] !== value) &&
-      element.getAttribute(name) !== value
-    ) {
-      element.setAttribute(name, value);
-    }
-  }
-  sourceAttributes.set(element, attrs);
 }
 
 /** Sets attributes, refusing `on*` event-handler names. */

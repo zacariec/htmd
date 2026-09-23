@@ -4,6 +4,7 @@ Framework-independent DOM rendering for HTMD. Enforces component contracts from 
 
 - `renderHtmdSource(target, source, { host? })` renders a static document, provides `host` to the components inside `target`, and returns a `RenderResult { document, pending, diagnostics }` with parser and contract diagnostics.
 - `materializeInto(target, nodes, { streaming?, host? })` reconciles parsed nodes without needlessly replacing component instances and returns the contract diagnostics.
+- `renderHtmdToString(source, { host? })` renders a static document to an HTML string without a DOM and returns `HtmdStringRender { html, diagnostics }`. See [Server rendering](#server-rendering).
 - `RegionTreeRenderer` consumes decoded `@htmdjs/wire` events into addressable regions.
 
 ```ts
@@ -32,6 +33,23 @@ Each custom element is resolved against `host.components`:
 - **Fallback:** unavailable components, unsupported `data-htmd-version` pins, invalid or missing attributes, and rule errors render `<div data-htmd-fallback="{tag}">`. It never instantiates components: a `text`-kind contract shows its raw text in a `<pre>`; otherwise the Markdown inside the element (component wrappers flattened) is rendered as Markdown.
 
 A change of resolution kind or tag replaces that block's DOM. The parser receives `host.components.rawTextTags()`, so raw-text payloads (such as `<code-block>` and `<htmd-fragment>`) are never parsed as HTMD.
+
+## Server rendering
+
+`renderHtmdToString` runs in plain Node, workers, and edge runtimes: it never touches `document`, `window`, or `customElements`. Its `html` is exactly what `renderHtmdSource` would materialize into an empty container — parsed by a browser, it produces the same DOM — and its `diagnostics` equal that render's. The output is:
+
+- Markdown rendered as safe HTML (raw HTML escaped, dangerous link protocols stripped).
+- Allowed components as their custom-element tags with only validated, declared attributes, and children per contract. These are inert markup until the elements register on the client (`registerHtmdElements()`), then they upgrade in place.
+- Fallbacks as `<div data-htmd-fallback="{tag}">` holding their text projection, exactly as in the DOM render.
+
+Component shadow content, host-provided data loads, and interaction happen on the client after upgrade; the server string carries none of them. To hydrate, give the page the same `source` and `host` and call `renderHtmdSource` on the container: it re-materializes the same content in place.
+
+```ts
+import { renderHtmdToString } from '@htmdjs/renderer';
+
+const { html, diagnostics } = renderHtmdToString(source, { host });
+response.end(`<article id="doc">${html}</article>`);
+```
 
 ## Streaming lifecycle
 

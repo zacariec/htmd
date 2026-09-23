@@ -25,6 +25,8 @@ export function Live({ tokens }: { tokens: AsyncIterable<string> }) {
 
 `HtmdDoc` accepts `source`, optional `host`, and optional `onDiagnostics(diagnostics: ReadonlyArray<HtmdDiagnostic>)`, which receives parser and contract diagnostics. `useHtmdStream(source, options?)` accepts `{ host?, limits? }` (`Partial<RenderLimits>` from `@htmdjs/renderer`). Without a host, `defaultHost` from `@htmdjs/contracts` applies. Both entry points register the built-in custom elements on mount; only components in the host catalog render.
 
+`HtmdDoc` server-renders and hydrates. On the server (`react-dom/server`) it emits the document as HTML via `renderHtmdToString` from `@htmdjs/renderer`: Markdown plus component tags with validated attributes. `hydrateRoot` adopts that markup without hydration errors; after mount the component registers the elements and re-materializes the same content in place, so components upgrade, load their data, and become interactive on the client. Pass the same `source` and `host` on server and client. The container's interior is owned by the renderer, so `HtmdDoc` does not accept `children` or `dangerouslySetInnerHTML`.
+
 Keep `source` and `host` identities stable across renders; memoize `streamText(...)` so a re-render does not restart the stream. One-shot sources such as `streamText` work under React StrictMode, and unmounting closes the underlying text source. Accepted stream sources are `Iterable<WireEvent>`, `AsyncIterable<WireEvent>`, `ReadableStream<WireEvent>`, and `EventSource`. Fetch byte streams require decoding/framing first. SSE messages carry one JSON-encoded wire event each.
 
 - `idle`: no event has arrived; an empty finite source remains idle.

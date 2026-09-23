@@ -1,10 +1,13 @@
 import { ComponentEvents, originRegion } from '@htmdjs/contracts';
-import type { ChoiceDetail } from '@htmdjs/contracts';
+import type { ChoiceDetail, InteractionValue, StatefulComponent } from '@htmdjs/contracts';
 import { LitElement, css, html } from 'lit';
 import type { PropertyValues, TemplateResult } from 'lit';
+import { z } from 'zod';
 
 import { ChoiceItem } from './choice-item.js';
 import { CHOICE_SELECT_EVENT } from './internal/choice-select.js';
+
+const ChoiceGroupState = z.object({ value: z.string() });
 
 /**
  * `<choice-group>` — a single-selection radio group of `<choice-item>`s.
@@ -14,8 +17,11 @@ import { CHOICE_SELECT_EVENT } from './internal/choice-select.js';
  * One item is in the tab order (the selected one, else the first); arrow
  * keys move focus and selection, Home/End jump to the ends. Every user
  * selection emits the public `choice` intent.
+ *
+ * Interaction state (`StatefulComponent`): `{ value }` while a choice is
+ * selected. Restoring sets the selection without emitting `choice`.
  */
-export class ChoiceGroup extends LitElement {
+export class ChoiceGroup extends LitElement implements StatefulComponent {
   public static override styles = css`
     :host {
       display: flex;
@@ -54,6 +60,19 @@ export class ChoiceGroup extends LitElement {
     if (changed.has('value')) {
       this.syncSelection();
     }
+  }
+
+  public htmdSnapshot(): InteractionValue | undefined {
+    return this.value.length > 0 ? { value: this.value } : undefined;
+  }
+
+  public htmdRestore(state: InteractionValue): void {
+    const parsed = ChoiceGroupState.safeParse(state);
+    if (!parsed.success) {
+      return;
+    }
+    this.value = parsed.data.value;
+    this.syncSelection();
   }
 
   private readonly handleSelect = (event: Event): void => {

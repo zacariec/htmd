@@ -93,4 +93,28 @@ Components find their host at effect time. `provideHtmdHost(target, host)` answe
 
 Payload schemas validate untrusted data before any of it renders: `TablePayload { columns, rows }`, `TableBatch { columns?, rows }` (the first batch must carry `columns`; later batches append rows), `MAX_TABLE_ROWS` (5000), `FragmentNode { tag, class?, text?, for?, attrs?, children? }`, and `FragmentState` (a JSON object).
 
+## Model instructions
+
+`modelInstructions(catalog, { examples? })` derives a system-prompt section from a host catalog: the format rules (Markdown prose, listed components only, double-quoted attributes, close tags promptly, no active content or `javascript:`/`data:` URLs, a URL is not permission to load it), then each contract in catalog order with its attributes (required ones marked), what its content may be, whether it appears only once its tag is complete, and its examples in fenced code blocks (`examples` defaults to `true`). It is deterministic and DOM-free. Only the catalog's components are mentioned: allowed children are filtered to the catalog and examples that would not validate against it are omitted. An empty catalog yields a Markdown-only instruction.
+
+```ts
+import { baseCatalog, modelInstructions } from '@htmdjs/contracts';
+
+const system = modelInstructions(baseCatalog.without('data-table'));
+```
+
+## Interaction state
+
+User-owned component state (a selection, a draft) can be saved and restored when a document renders again, e.g. after a reload. Components opt in by implementing `StatefulComponent` (`htmdSnapshot(): InteractionValue | undefined` and `htmdRestore(state)`, detected with `isStatefulComponent(element)`); `InteractionValue` is any JSON value. Restoring is not a user action, so components must not emit intents from `htmdRestore`.
+
+```ts
+import { captureInteractionState, restoreInteractionState } from '@htmdjs/contracts';
+
+sessionStorage.setItem('answer-state', JSON.stringify(captureInteractionState(root)));
+// …after rendering the same document again:
+const restored = restoreInteractionState(root, JSON.parse(sessionStorage.getItem('answer-state') ?? 'null'));
+```
+
+`captureInteractionState(root)` walks `root`'s descendants in document order, including open shadow roots (an element's shadow tree before its light children), and returns an `InteractionSnapshot` `{ version: 1, components: [{ region, tag, index, state }] }` for every stateful component with state. `region` is `originRegion(element)` (or `''`), and `index` is the component's ordinal among stateful components with the same region and tag, so the key is stable when the same source renders again. `restoreInteractionState(root, snapshot)` validates `snapshot` with the `InteractionSnapshot` schema (anything invalid restores nothing and never throws), applies matching entries, ignores unmatched ones, and returns how many components it restored.
+
 Part of [HTMD](https://github.com/zacariec/htmd). Install with `npm install @htmdjs/contracts@alpha`.

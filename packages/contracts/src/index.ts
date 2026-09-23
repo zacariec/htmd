@@ -25,6 +25,16 @@ export {
 } from './host.js';
 export type { DataLoader, DataRequest, HtmdHost, HtmdHostOptions, UrlRequest } from './host.js';
 export {
+  InteractionSnapshot,
+  InteractionValue,
+  captureInteractionState,
+  isStatefulComponent,
+  restoreInteractionState,
+} from './interaction.js';
+export type { StatefulComponent } from './interaction.js';
+export { modelInstructions } from './model-instructions.js';
+export type { ModelInstructionsOptions } from './model-instructions.js';
+export {
   FragmentNode,
   FragmentState,
   MAX_TABLE_ROWS,

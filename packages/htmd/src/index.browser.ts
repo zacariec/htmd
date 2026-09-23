@@ -28,6 +28,7 @@ export {
   authorizeComponentUrl,
   baseCatalog,
   baseContracts,
+  captureInteractionState,
   chatMessageContract,
   ChoiceDetail,
   choiceGroupContract,
@@ -45,7 +46,11 @@ export {
   HOST_REQUEST_EVENT,
   htmdFragmentContract,
   imageCardContract,
+  InteractionSnapshot,
+  InteractionValue,
+  isStatefulComponent,
   MAX_TABLE_ROWS,
+  modelInstructions,
   originRegion,
   provideHtmdHost,
   RefineDetail,
@@ -53,6 +58,7 @@ export {
   requestHtmdHost,
   resolveChildren,
   resolveComponent,
+  restoreInteractionState,
   revokeHtmdHost,
   sameOriginMediaPolicy,
   sanitizeUrl,
@@ -76,8 +82,10 @@ export type {
   HtmdDiagnostic,
   HtmdHost,
   HtmdHostOptions,
+  ModelInstructionsOptions,
   PartialPolicy,
   ResolveOptions,
+  StatefulComponent,
   UrlPurpose,
   UrlRequest,
 } from '@htmdjs/contracts';
@@ -87,6 +95,7 @@ export {
   ChoiceGroup,
   ChoiceItem,
   CodeBlock,
+  completeRefine,
   DataTable,
   defineOnce,
   FilePreview,
@@ -100,6 +109,7 @@ export {
 export type {
   ChatMessageAuthor,
   ChatMessageStatus,
+  CompleteRefineOptions,
   DataTableState,
   HtmdElementsLogSink,
 } from '@htmdjs/elements';
@@ -110,6 +120,7 @@ export {
   HtmdErrorEvent,
   parseWireEvent,
   parseWireEventJson,
+  readWireEvents,
   RegionDoneEvent,
   RegionEvent,
   RegionId,
@@ -118,10 +129,18 @@ export {
   safeParseWireEvent,
   StreamEvent,
   streamText,
+  toEventStream,
+  WIRE_EVENT_STREAM_HEADERS,
   WireEvent,
   WireWriter,
 } from '@htmdjs/wire';
-export type { StreamTextOptions, WireErrorOptions, WireRegionOptions } from '@htmdjs/wire';
+export type {
+  ReadWireEventsOptions,
+  StreamTextOptions,
+  ToEventStreamOptions,
+  WireErrorOptions,
+  WireRegionOptions,
+} from '@htmdjs/wire';
 
 export {
   applySafeAttrs,
@@ -130,11 +149,13 @@ export {
   RegionTreeRenderer,
   RendererEvents,
   renderHtmdSource,
+  renderHtmdToString,
   renderMarkdown,
 } from '@htmdjs/renderer';
 export type {
   DocDoneDetail,
   DocOpenDetail,
+  HtmdStringRender,
   MaterializeOptions,
   RegionCreatedDetail,
   RegionDoneDetail,

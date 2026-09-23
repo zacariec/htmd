@@ -11,7 +11,7 @@
 
 2. **Components have executable contracts.** Each component declares its attributes, children, partial-rendering policy, state ownership, intents, and effects (§4). Producers validate against contracts, renderers enforce them, and the host decides which components, URLs, and data a document may use.
 
-3. **Documents are live, addressed trees.** Each renderable region is addressable. Regions fill independently, complete, and are replaced mid-stream; replay after reconnect reproduces document instructions (§3). External data and user interaction state require separate snapshotting if historical reproduction is needed.
+3. **Documents are live, addressed trees.** Each renderable region is addressable. Regions fill independently, complete, and are replaced mid-stream; replay after reconnect reproduces document instructions (§3). User interaction state is captured and restored separately (§4.5); external data requires separate snapshotting if historical reproduction is needed.
 
 ## 2. The format on disk
 
@@ -84,7 +84,7 @@ Attribute values decode `amp`, `lt`, `gt`, `quot`, `apos`, and valid numeric Uni
 
 ## 3. The wire protocol
 
-`.htmd` documents stream over a connection (SSE, WebSocket, or any transport that preserves event order) as **region-addressed events**. Every field name on the wire is camelCase.
+`.htmd` documents stream over a connection (HTTP, SSE, WebSocket, or any transport that preserves event order) as **region-addressed events**. Every field name on the wire is camelCase.
 
 ### Region IDs
 
@@ -146,16 +146,43 @@ An event that would exceed a limit is rejected, a non-recoverable error is emitt
 
 - **Out-of-order materialisation.** A producer can declare regions A, B, C up front (skeleton paint) then stream body content into C before A is finished.
 - **Resumability support.** A host reconnects with the last accepted `seq` and a producer replays events. Automatic transport reconnection and persistent logs are host responsibilities.
-- **Replayable instructions.** Replaying an ordered log rebuilds the document structure. Fetched data and user choices are not immutable snapshots.
+- **Replayable instructions.** Replaying an ordered log rebuilds the document structure. Fetched data and user choices are not part of the log; hosts snapshot interaction state separately (§4.5).
 - **Multiple producers, one document.** Producers can fill independent regions if a host merges their events into a single ordered sequence.
+
+### HTTP transport
+
+Events travel over an ordinary `fetch` response, so requests can POST a prompt and carry auth headers (which `EventSource` cannot). Two framings are defined:
+
+- **SSE** (`content-type: text/event-stream`): one wire event as JSON per `data:` message. Multiple `data:` lines join with `\n`; comments, `id:`, and `retry:` are ignored; messages with an `event:` name other than `message` belong to other consumers and are skipped; a message still missing its closing blank line when the body ends is discarded.
+- **JSONL**: one wire event per non-blank line; the final line needs no trailing newline.
+
+Lines may end in `\n`, `\r\n`, or `\r`. Every message is validated as a wire event; a malformed one ends the stream with an error naming its 1-based message number.
+
+The reference implementation (`@htmdjs/wire`) provides both ends. `toEventStream(events, { format? })` encodes an iterable of events as a `ReadableStream<Uint8Array>` body (SSE by default), pulling one event per read so a slow client slows generation, and closing the event source when the body is cancelled; `WIRE_EVENT_STREAM_HEADERS` supplies its SSE headers. `readWireEvents(input, { format?, signal? })` reads a `Response`, a promise of one, or a byte stream: `auto` framing uses SSE for a `text/event-stream` response and JSONL otherwise (for a bare stream, SSE when the first non-blank line is an SSE field or comment). A response that is not ok throws `HTTP <status> <statusText>`. Stopping early, aborting `signal`, or an error cancels the body.
+
+```ts
+// Server
+return new Response(toEventStream(streamText(tokens)), { headers: WIRE_EVENT_STREAM_HEADERS });
+// Client (React)
+const events = useMemo(() => readWireEvents(fetch('/api/chat', { method: 'POST', body })), [body]);
+const { ref } = useHtmdStream(events, { host });
+```
+
+Unmounting cancels the fetch body; on the server, cancelling the response stream closes the event source, and `streamText` then closes the model stream.
 
 ### Rendering and adapter behavior
 
 Streaming appends reconcile the affected region instead of replacing every DOM child. Unchanged component instances retain shadow DOM, focused drafts, selected choices, loaded data, and runtime-reflected attributes. Reconciliation is positional, not a keyed-movement algorithm. Attribute updates follow ownership (§4.5).
 
-The parser reparses the accumulated region buffer on every chunk; HTMD is not a fully incremental Markdown parser. The renderer skips unchanged blocks, reconciles changed Markdown DOM, and renders the streaming frontier provisionally (§2).
+Markdown renders incrementally. Each finished top-level Markdown block is converted to HTML and DOM once, and its DOM is never touched again; only the unfinished end of the region renders again. Block boundaries come from micromark's CommonMark + GFM tokenizer. A block is finished only once the next top-level block has started on a complete line, because a partial last line can still change meaning (`#` versus `#tag`, a fence gaining an info string, indentation still arriving). The output equals rendering the whole region at once: link reference definitions apply across blocks (while streaming, definitions in unfinished blocks are left out, so a partial destination never links), and a region containing `[^` (GFM footnotes) renders as one block.
 
-The React hook accepts decoded event iterables, decoded `ReadableStream<WireEvent>` instances, and EventSource JSON messages. It reports `done` only after an accepted `doc-done`; nonempty finite streams ending earlier report interruption. Empty streams remain idle. Completion/fatal errors stop consumption. Cleanup cancels owned readers and removes listeners without closing a caller-owned EventSource. Source replacement resets prior document/error state.
+HTMD is not a fully incremental Markdown parser. Its own parser still re-parses the accumulated region text on every chunk to locate components (measured at about 0.1 ms for 20 KB), and a single very large block, such as one huge code block, still re-renders on every chunk. Measured in jsdom streaming one region in 4-character chunks, the last chunk of a 5 KB answer costs 0.41 ms (previously 9.3 ms), of a 20 KB answer 0.47 ms (previously 61 ms; total 2.1 s, previously 143 s), and of a 40 KB answer 0.68 ms (total 4.7 s; previously it did not finish in minutes).
+
+The React hook accepts decoded event iterables (including `readWireEvents` over `fetch`), decoded `ReadableStream<WireEvent>` instances, and EventSource JSON messages. It reports `done` only after an accepted `doc-done`; nonempty finite streams ending earlier report interruption. Empty streams remain idle. Completion/fatal errors stop consumption. Cleanup cancels owned readers and removes listeners without closing a caller-owned EventSource. Source replacement resets prior document/error state.
+
+### Server rendering
+
+`renderHtmdToString(source, { host })` renders a complete document to an HTML string without a DOM. Its output parses to the same DOM that `renderHtmdSource` materializes, with the same diagnostics: Markdown as safe HTML, allowed components as their custom-element tags with validated attributes, and fallbacks as `data-htmd-fallback` projections. Nothing defers, because a static render is never streaming. Component shadow content and data loads happen on the client once the elements register; the React `HtmdDoc` server-renders this markup and hydrates it.
 
 ## 4. Components and contracts
 
@@ -216,6 +243,8 @@ A component's data can also be partial: `<data-table>` shows validated row batch
 
 Appending content never resets user-owned state. `region-replace` deliberately does: it replaces the region body and its components.
 
+User-owned state can be carried across a reload or a fresh render of the same source. Components opt in by implementing `StatefulComponent` (`htmdSnapshot()` / `htmdRestore(state)`). `captureInteractionState(root)` returns a JSON-serializable `InteractionSnapshot` (`{ version: 1, components: [{ region, tag, index, state }] }`), walking descendants in document order including open shadow roots; each entry is keyed by origin region, tag, and ordinal among stateful components with that region and tag. `restoreInteractionState(root, snapshot)` validates the snapshot, applies matching entries, ignores the rest, and returns how many components it restored. Restoring is not a user action and never emits intents. In the base set, `<choice-group>` saves its selected value and `<refine-prompt>` its draft.
+
 ### 4.6 Intents
 
 Components express user intent as DOM events that bubble and are composed, so hosts listen on any ancestor.
@@ -244,6 +273,10 @@ Renderers report `HtmdDiagnostic`s: parser diagnostics (`Diagnostic`) and contra
 
 Producers can validate before sending: parse with the host catalog's raw-text tags and run `validateNodes(nodes, catalog)`, which applies the renderer's resolution rules. Fallback content is text, so its descendants are not validated.
 
+### 4.8 Model instructions
+
+Producers that are language models should be instructed from the host's catalog, not a fixed list. `modelInstructions(catalog, { examples? })` generates deterministic system-prompt Markdown: the output rules, then each component in catalog order with its attributes (required ones marked), allowed content, partial behavior, and examples (included by default). Components outside the catalog are never mentioned, allowed children are filtered to the catalog, and examples that would not validate against it are omitted. An empty catalog yields Markdown-only instructions. [`AI_SPEC.md`](../AI_SPEC.md) remains the full reference for the base set.
+
 ## 5. The base component set
 
 `baseCatalog` holds nine component contracts (all version 1), implemented by `@htmdjs/elements` as Lit web components. Hosts may offer a subset or extend it. Lengths are in characters; URL attributes are non-empty and at most 2048 characters.
@@ -268,8 +301,8 @@ All attributes except `<choice-group value>` are source-owned. Component-specifi
 - **`<code-block>`** content is literal code: never Markdown, never components. It renders as it streams. Copy is a labelled button and copies only on user activation.
 - **`<data-table>`** loads `src` only when the host authorizes `data` (blocked under the default host), through `loadData` when present. States: blocked, loading, partial, loaded, empty, interrupted, failed. Payloads and batches are validated before rendering; at most 5000 rows render and truncation is reported. Loaded data belongs to the element for its current `src`: changing `src`, replacing the region, or removing the element cancels outstanding loads, and late results are discarded. Native table with header cells; state changes are announced politely.
 - **`<file-preview>`** shows a file reference; the download link, labelled with the file name, appears only when the host authorizes `href` for `download`.
-- **`<image-card>`** reserves space from `width` and `height` before the image loads. The image loads only when the host authorizes `src` for `image`; otherwise the alt text is shown.
-- **`<refine-prompt>`** is a labelled textarea and submit button attached to the region in `target`. Draft text, selection, focus, and submission state are user-owned and survive streaming and finalization. Submitting a non-empty request emits `refine` and keeps the form disabled until the host calls `reset(clearInput?)`.
+- **`<image-card>`** reserves space from `width` and `height` before the image loads. The image loads only when the host authorizes `src` for `image`; when it is not authorized, or an authorized image fails to load, the alt text is shown in its place. Changing `src` retries.
+- **`<refine-prompt>`** is a labelled textarea and submit button attached to the region in `target`. Draft text, selection, focus, and submission state are user-owned and survive streaming and finalization. Submitting a non-empty request emits `refine` and keeps the form disabled until the host ends the submission with `completeRefine(event, { clearInput? })` (which finds the originating prompt from the event, even after an asynchronous round trip) or the element's `reset(clearInput?)`.
 - **`<htmd-fragment>`** renders a structured JSON node tree (below). It renders only after its closing tag arrives and the complete payload validates; partial JSON never renders, and an invalid complete payload falls back.
 
 ### `<htmd-fragment>` payload
@@ -327,12 +360,12 @@ List only trusted component contracts in a catalog and register only trusted imp
 
 This repository.
 
-- [`@htmdjs/contracts`](../packages/contracts) — component contracts, catalogs, hosts, intents, payload schemas, and validation.
+- [`@htmdjs/contracts`](../packages/contracts) — component contracts, catalogs, hosts, intents, payload schemas, validation, model instructions, and interaction state.
 - [`@htmdjs/parser`](../packages/parser) — parse source into AST, pending state, and diagnostics.
-- [`@htmdjs/wire`](../packages/wire) — event-shape validation and producer helpers that number events and turn streamed text into a complete document.
+- [`@htmdjs/wire`](../packages/wire) — event-shape validation, producer helpers that number events and turn streamed text into a complete document, and HTTP transport.
 - [`@htmdjs/elements`](../packages/elements) — base component implementations.
-- [`@htmdjs/renderer`](../packages/renderer) — contract-enforcing, state-preserving DOM rendering and protocol lifecycle.
-- [`@htmdjs/react`](../packages/react) — static documents and stream lifecycle adapter.
+- [`@htmdjs/renderer`](../packages/renderer) — contract-enforcing, state-preserving, incremental DOM rendering, protocol lifecycle, and DOM-free server rendering.
+- [`@htmdjs/react`](../packages/react) — server-renderable documents and stream lifecycle adapter.
 - [`@htmdjs/core`](../packages/htmd) — meta package.
 
 ## 9. Non-goals

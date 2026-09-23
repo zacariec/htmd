@@ -18,6 +18,8 @@ export { FilePreview } from './file-preview.js';
 export { HtmdFragment } from './htmd-fragment.js';
 export { ImageCard } from './image-card.js';
 export { RefinePrompt } from './refine-prompt.js';
+export { completeRefine } from './complete-refine.js';
+export type { CompleteRefineOptions } from './complete-refine.js';
 
 export { defineOnce } from './define-once.js';
 export { HtmdElementTag, registerHtmdElements } from './register-htmd-elements.js';

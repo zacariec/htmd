@@ -491,3 +491,29 @@ textarea.source.sink-source {
   outline: 1px solid rgba(165, 180, 252, 0.6);
   outline-offset: 2px;
 }
+
+.state-controls {
+  margin-top: 10px;
+}
+
+details.instructions {
+  grid-column: 1 / -1;
+  max-height: none;
+}
+
+details.instructions summary {
+  cursor: pointer;
+}
+
+details.instructions summary h3 {
+  display: inline;
+}
+
+details.instructions pre {
+  margin: 8px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}

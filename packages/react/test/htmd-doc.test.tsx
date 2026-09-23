@@ -1,6 +1,9 @@
 import { baseCatalog, createHost } from '@htmdjs/contracts';
 import { setHtmdElementsLogSink } from '@htmdjs/elements';
-import { cleanup, render } from '@testing-library/react';
+import { renderHtmdSource } from '@htmdjs/renderer';
+import { act, cleanup, render } from '@testing-library/react';
+import { type Root, hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HtmdDoc } from '../src/htmd-doc.js';
 
@@ -60,5 +63,84 @@ describe('<HtmdDoc>', () => {
     const host = container.firstChild as HTMLElement;
     expect(host.getAttribute('class')).toBe('doc');
     expect(host.getAttribute('data-testid')).toBe('host');
+  });
+});
+
+describe('<HtmdDoc> server rendering', () => {
+  const source = [
+    '# Report',
+    '',
+    'Some **bold** text.',
+    '',
+    '<image-card src="/x.png" alt="x"></image-card>',
+    '',
+    '<chat-message author="agent">',
+    '',
+    'Inside *a* message.',
+    '',
+    '</chat-message>',
+  ].join('\n');
+
+  let root: Root | undefined;
+  let mounted: HTMLElement | undefined;
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    mounted?.remove();
+    root = undefined;
+    mounted = undefined;
+  });
+
+  /** Hydrates server markup for `<HtmdDoc source={source}/>` in a connected container. */
+  async function hydrate(onRecoverableError: () => void): Promise<HTMLElement> {
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<HtmdDoc source={source} />);
+    document.body.append(container);
+    mounted = container;
+    await act(async () => {
+      root = hydrateRoot(container, <HtmdDoc source={source} />, { onRecoverableError });
+    });
+    return container;
+  }
+
+  it('renders the document markup on the server', () => {
+    const html = renderToString(<HtmdDoc source={source} className="doc" />);
+
+    expect(html).toMatch(/^<div class="doc">/);
+    expect(html).toContain('<h1>Report</h1>');
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).toContain('<image-card src="/x.png" alt="x"></image-card>');
+    expect(html).toMatch(/<chat-message author="agent"><p>Inside <em>a<\/em> message.<\/p>/);
+  });
+
+  it('hydrates without recoverable errors and materializes the same content', async () => {
+    const onRecoverableError = vi.fn();
+    const container = await hydrate(onRecoverableError);
+
+    const expected = document.createElement('div');
+    document.body.append(expected);
+    renderHtmdSource(expected, source);
+    // Let both trees' element updates settle before comparing.
+    const settled = Promise.withResolvers<void>();
+    setTimeout(settled.resolve, 0);
+    await settled.promise;
+
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(container.firstElementChild?.innerHTML).toBe(expected.innerHTML);
+    expected.remove();
+  });
+
+  it('updates after hydration without React resetting materialized elements', async () => {
+    const container = await hydrate(vi.fn());
+    const card = container.querySelector('image-card');
+    expect(card).not.toBeNull();
+
+    await act(async () => {
+      root?.render(<HtmdDoc source={source.replace('# Report', '# Revised')} />);
+    });
+
+    expect(container.querySelector('h1')?.textContent).toBe('Revised');
+    // The unchanged block keeps its live element.
+    expect(container.querySelector('image-card')).toBe(card);
   });
 });

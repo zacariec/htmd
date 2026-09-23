@@ -14,3 +14,5 @@ export {
 } from './events.js';
 export { SCHEMA_VERSION, WireWriter, streamText } from './writer.js';
 export type { StreamTextOptions, WireErrorOptions, WireRegionOptions } from './writer.js';
+export { WIRE_EVENT_STREAM_HEADERS, readWireEvents, toEventStream } from './transport.js';
+export type { ReadWireEventsOptions, ToEventStreamOptions } from './transport.js';

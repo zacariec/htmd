@@ -1,8 +1,13 @@
 import { ComponentEvents, RefineDetail, originRegion } from '@htmdjs/contracts';
+import type { InteractionValue, StatefulComponent } from '@htmdjs/contracts';
 import { LitElement, css, html } from 'lit';
 import type { TemplateResult } from 'lit';
+import { z } from 'zod';
 
+import { recordRefineOrigin } from './complete-refine.js';
 import { HtmdElementsLogger } from './internal/logger.js';
+
+const RefinePromptState = z.object({ draft: z.string() });
 
 /**
  * `<refine-prompt>` — a re-prompt affordance attached to a region.
@@ -10,11 +15,15 @@ import { HtmdElementsLogger } from './internal/logger.js';
  * On submit, dispatches the `refine` intent with `{ target, prompt, region }`
  * and disables itself; nothing is emitted unless the detail validates.
  * Completion contract: the consumer that handled the refine calls
- * `element.reset()` when the round-trip finishes (pass `true` to also clear
- * the textarea). The element never re-enables itself. The draft lives in the
- * textarea, so source updates never reset it.
+ * `element.reset()` (or `completeRefine(event)`) when the round-trip
+ * finishes (pass `true` to also clear the textarea). The element never
+ * re-enables itself. The draft lives in the textarea, so source updates
+ * never reset it.
+ *
+ * Interaction state (`StatefulComponent`): `{ draft }` while the textarea
+ * has text. Restoring sets the draft; it never submits.
  */
-export class RefinePrompt extends LitElement {
+export class RefinePrompt extends LitElement implements StatefulComponent {
   public static override styles = css`
     :host {
       display: block;
@@ -75,16 +84,48 @@ export class RefinePrompt extends LitElement {
 
   protected submitting: boolean = false;
 
+  /** Draft restored before the textarea rendered; applied on first render. */
+  private pendingDraft: string | undefined = undefined;
+
   /** Re-enables the form after a completed refine round-trip. */
   public reset(clearInput: boolean = false): void {
     this.submitting = false;
     if (!clearInput) {
       return;
     }
+    this.pendingDraft = undefined;
     const textarea = this.renderRoot.querySelector('textarea');
     if (textarea !== null) {
       textarea.value = '';
     }
+  }
+
+  public htmdSnapshot(): InteractionValue | undefined {
+    const draft = this.hasUpdated
+      ? (this.renderRoot.querySelector('textarea')?.value ?? '')
+      : (this.pendingDraft ?? '');
+    return draft.length > 0 ? { draft } : undefined;
+  }
+
+  public htmdRestore(state: InteractionValue): void {
+    const parsed = RefinePromptState.safeParse(state);
+    if (!parsed.success) {
+      return;
+    }
+    const textarea = this.hasUpdated ? this.renderRoot.querySelector('textarea') : null;
+    if (textarea === null) {
+      this.pendingDraft = parsed.data.draft;
+      return;
+    }
+    textarea.value = parsed.data.draft;
+  }
+
+  protected override firstUpdated(): void {
+    const textarea = this.renderRoot.querySelector('textarea');
+    if (this.pendingDraft !== undefined && textarea !== null) {
+      textarea.value = this.pendingDraft;
+    }
+    this.pendingDraft = undefined;
   }
 
   private readonly handleSubmit = (event: Event): void => {
@@ -109,13 +150,13 @@ export class RefinePrompt extends LitElement {
       return;
     }
     this.submitting = true;
-    this.dispatchEvent(
-      new CustomEvent<RefineDetail>(ComponentEvents.Refine, {
-        detail: detail.data,
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const refine = new CustomEvent<RefineDetail>(ComponentEvents.Refine, {
+      detail: detail.data,
+      bubbles: true,
+      composed: true,
+    });
+    recordRefineOrigin(refine, this);
+    this.dispatchEvent(refine);
   };
 
   public override render(): TemplateResult {

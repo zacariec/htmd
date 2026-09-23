@@ -1,6 +1,8 @@
 # `.htmd` — model spec
 
-Drop into a system prompt. `.htmd` is a streaming document format: Markdown for prose, plus components from a library the host controls, used only when structure or interaction is required. Every component has a contract; content that breaks it is shown to the reader as plain text instead of a working component.
+> **Hosts:** generate the system prompt with `modelInstructions(host.components)` from `@htmdjs/contracts` (also exported by `@htmdjs/core`). It describes only the components, children, and examples your host actually offers, so the model never writes a component that will render as plain text. This file is the full reference for the base component set.
+
+Otherwise, drop this file into a system prompt. `.htmd` is a streaming document format: Markdown for prose, plus components from a library the host controls, used only when structure or interaction is required. Every component has a contract; content that breaks it is shown to the reader as plain text instead of a working component.
 
 ## Hard rules
 
