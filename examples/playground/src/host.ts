@@ -1,12 +1,20 @@
 import { baseCatalog, createHost, sameOriginMediaPolicy } from '@htmdjs/contracts';
-import type { DataRequest, HtmdHost, TableBatch, UrlRequest } from '@htmdjs/contracts';
+import type { ComponentCatalog, DataRequest, HtmdHost, TableBatch } from '@htmdjs/contracts';
+
+type Row = Readonly<Record<string, unknown>>;
+
+interface Dataset {
+  readonly rows: readonly Row[];
+  /** Throw after this many batches, to demonstrate an interrupted table. */
+  readonly failAfterBatches?: number;
+}
 
 const COLUMNS: readonly string[] = ['week', 'revenue', 'orders'];
 const BATCH_SIZE = 4;
 const BATCH_DELAY_MS = 400;
 
 /** Weekly Q4 sales, w40–w52, served in-page instead of from a backend. */
-const Q4_SALES: readonly Readonly<Record<string, unknown>>[] = [
+const Q4_SALES: readonly Row[] = [
   { week: 'w40', revenue: 182_400, orders: 1_204 },
   { week: 'w41', revenue: 187_950, orders: 1_236 },
   { week: 'w42', revenue: 191_300, orders: 1_251 },
@@ -22,19 +30,10 @@ const Q4_SALES: readonly Readonly<Record<string, unknown>>[] = [
   { week: 'w52', revenue: 219_400, orders: 1_433 },
 ];
 
-const DATASETS: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>> = {
-  '/api/sales/q4': Q4_SALES,
+const DATASETS: Readonly<Record<string, Dataset>> = {
+  '/api/sales/q4': { rows: Q4_SALES },
+  '/api/sales/flaky': { rows: Q4_SALES, failAfterBatches: 2 },
 };
-
-/** Media follows the default policy; data only for the playground's own datasets. */
-function authorizeUrl(request: UrlRequest): boolean {
-  if (request.purpose !== 'data') {
-    return sameOriginMediaPolicy(request);
-  }
-  return (
-    request.url.origin === window.location.origin && DATASETS[request.url.pathname] !== undefined
-  );
-}
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
@@ -53,22 +52,59 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 /** Streams a dataset as progressive table batches; the first batch carries the columns. */
 async function* loadData(request: DataRequest): AsyncGenerator<TableBatch> {
-  const rows = DATASETS[request.url.pathname];
-  if (rows === undefined) {
+  const dataset = DATASETS[request.url.pathname];
+  if (dataset === undefined) {
     throw new Error(`no playground dataset for ${request.url.pathname}`);
   }
-  for (let start = 0; start < rows.length; start += BATCH_SIZE) {
-    if (start > 0) {
+  for (let batch = 0; batch * BATCH_SIZE < dataset.rows.length; batch += 1) {
+    if (batch > 0) {
       await delay(BATCH_DELAY_MS, request.signal);
     }
-    const batch = rows.slice(start, start + BATCH_SIZE);
-    yield start === 0 ? { columns: [...COLUMNS], rows: batch } : { rows: batch };
+    if (batch === dataset.failAfterBatches) {
+      throw new Error('the playground source dropped the connection');
+    }
+    const rows = dataset.rows.slice(batch * BATCH_SIZE, (batch + 1) * BATCH_SIZE);
+    yield batch === 0 ? { columns: [...COLUMNS], rows } : { rows };
   }
 }
 
+/** What the host lets a document do beyond rendering its catalog. */
+export interface PlaygroundPermissions {
+  /** Load the playground's own datasets. Other data URLs are always refused. */
+  readonly data: boolean;
+  /** Load same-origin images. */
+  readonly images: boolean;
+  /** Expose same-origin links and downloads. */
+  readonly links: boolean;
+}
+
+export function createPlaygroundHost(
+  components: ComponentCatalog,
+  permissions: PlaygroundPermissions,
+): HtmdHost {
+  return createHost({
+    components,
+    authorizeUrl: (request) => {
+      switch (request.purpose) {
+        case 'data':
+          return (
+            permissions.data &&
+            request.url.origin === window.location.origin &&
+            DATASETS[request.url.pathname] !== undefined
+          );
+        case 'image':
+          return permissions.images && sameOriginMediaPolicy(request);
+        default:
+          return permissions.links && sameOriginMediaPolicy(request);
+      }
+    },
+    loadData,
+  });
+}
+
 /** Module-scoped so every render sees the same host identity. */
-export const playgroundHost: HtmdHost = createHost({
-  components: baseCatalog,
-  authorizeUrl,
-  loadData,
+export const playgroundHost: HtmdHost = createPlaygroundHost(baseCatalog, {
+  data: true,
+  images: true,
+  links: true,
 });

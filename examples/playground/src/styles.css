@@ -230,3 +230,264 @@ pre.wire-log {
 .render :not(:defined) {
   visibility: hidden;
 }
+
+/* Kitchen sink */
+
+.render table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.render th,
+.render td {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.controls button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  min-width: 76px;
+}
+
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+fieldset.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+fieldset.chips legend {
+  padding: 0 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+fieldset.chips label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+fieldset.chips label:has(input:not(:checked)) {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+details.try {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+details.try summary {
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+details.try ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+textarea.source.sink-source {
+  min-height: 40vh;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.status-line [data-status="playing"] {
+  color: #34d399;
+}
+
+.status-line [data-status="failed"] {
+  color: #f87171;
+}
+
+.status-line .frame {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  opacity: 0.7;
+  text-transform: none;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  font-size: 12px;
+  text-transform: none;
+}
+
+.render.sink-render {
+  min-height: 50vh;
+}
+
+.sink-panels {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 1200px) {
+  .sink-panels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.event-log {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0a0a0a;
+  font-size: 12px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.event-log h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+
+.event-log ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.event-log li {
+  margin: 3px 0;
+  word-break: break-word;
+}
+
+.event-log .empty {
+  margin: 0;
+  opacity: 0.5;
+}
+
+.event-log [data-kind="choice"],
+.event-log [data-kind="refine"] {
+  color: #a5b4fc;
+}
+
+.event-log [data-kind="host"],
+.event-log [data-kind="lifecycle"] {
+  color: #34d399;
+}
+
+.event-log [data-kind="warning"] {
+  color: #fbbf24;
+}
+
+.event-log [data-kind="error"] {
+  color: #f87171;
+}
+
+/* Deferred components hold their position as a skeleton until complete. */
+.render [data-htmd-deferred] {
+  position: relative;
+  min-height: 40px;
+  /* Placeholders can land inside flex rows (a choice-group), so they need their own width. */
+  min-width: 200px;
+  overflow: hidden;
+  margin: 8px 0;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #18181b 0%, #27272a 50%, #18181b 100%);
+  background-size: 200% 100%;
+  animation: htmd-skeleton 1.2s ease-in-out infinite;
+}
+
+.render [data-htmd-deferred]::after {
+  content: "<" attr(data-htmd-deferred) "> streaming…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+@keyframes htmd-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.render [data-htmd-fallback] {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+
+/* X-ray: outline the structure HTMD tracks. */
+.render[data-xray="true"] [data-htmd-region] {
+  outline: 1px dashed #3b82f6;
+  outline-offset: 4px;
+}
+
+.render[data-xray="true"] [data-htmd-pending] {
+  outline-color: #fbbf24;
+  outline-style: solid;
+}
+
+.render[data-xray="true"] [data-htmd-fallback]::before {
+  content: "fallback: <" attr(data-htmd-fallback) ">";
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: #f59e0b;
+}
+
+.render[data-xray="true"]
+  :is(
+    chat-message,
+    choice-group,
+    choice-item,
+    code-block,
+    data-table,
+    file-preview,
+    image-card,
+    refine-prompt,
+    htmd-fragment
+  ) {
+  outline: 1px solid rgba(165, 180, 252, 0.6);
+  outline-offset: 2px;
+}

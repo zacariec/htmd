@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" width="1200" height="480" font-family="system-ui, sans-serif">
+<rect width="1200" height="480" fill="#0a0a0a"/>
+<text x="80" y="28" fill="#e5e5e5" font-size="20" font-weight="600">Weekly revenue, Q4 (USD)</text>
+<line x1="80" x2="1180" y1="420.0" y2="420.0" stroke="#27272a"/>
+<text x="68" y="425.0" fill="#71717a" font-size="14" text-anchor="end">0k</text>
+<line x1="80" x2="1180" y1="344.0" y2="344.0" stroke="#27272a"/>
+<text x="68" y="349.0" fill="#71717a" font-size="14" text-anchor="end">50k</text>
+<line x1="80" x2="1180" y1="268.0" y2="268.0" stroke="#27272a"/>
+<text x="68" y="273.0" fill="#71717a" font-size="14" text-anchor="end">100k</text>
+<line x1="80" x2="1180" y1="192.0" y2="192.0" stroke="#27272a"/>
+<text x="68" y="197.0" fill="#71717a" font-size="14" text-anchor="end">150k</text>
+<line x1="80" x2="1180" y1="116.0" y2="116.0" stroke="#27272a"/>
+<text x="68" y="121.0" fill="#71717a" font-size="14" text-anchor="end">200k</text>
+<line x1="80" x2="1180" y1="40.0" y2="40.0" stroke="#27272a"/>
+<text x="68" y="45.0" fill="#71717a" font-size="14" text-anchor="end">250k</text>
+<rect x="92.5" y="142.8" width="58.2" height="277.2" rx="4" fill="#6366f1"/>
+<text x="121.5" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w40</text>
+<rect x="175.5" y="134.3" width="58.2" height="285.7" rx="4" fill="#6366f1"/>
+<text x="204.6" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w41</text>
+<rect x="258.6" y="129.2" width="58.2" height="290.8" rx="4" fill="#6366f1"/>
+<text x="287.7" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w42</text>
+<rect x="341.7" y="131.5" width="58.2" height="288.5" rx="4" fill="#6366f1"/>
+<text x="370.8" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w43</text>
+<rect x="424.8" y="121.0" width="58.2" height="299.0" rx="4" fill="#6366f1"/>
+<text x="453.8" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w44</text>
+<rect x="507.8" y="114.3" width="58.2" height="305.7" rx="4" fill="#6366f1"/>
+<text x="536.9" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w45</text>
+<rect x="590.9" y="108.6" width="58.2" height="311.4" rx="4" fill="#6366f1"/>
+<text x="620.0" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w46</text>
+<rect x="674.0" y="71.0" width="58.2" height="349.0" rx="4" fill="#6366f1"/>
+<text x="703.1" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w47</text>
+<rect x="757.1" y="94.3" width="58.2" height="325.7" rx="4" fill="#6366f1"/>
+<text x="786.2" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w48</text>
+<rect x="840.2" y="160.0" width="58.2" height="260.0" rx="4" fill="#f87171"/>
+<text x="869.2" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w49</text>
+<rect x="923.2" y="102.7" width="58.2" height="317.3" rx="4" fill="#6366f1"/>
+<text x="952.3" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w50</text>
+<rect x="1006.3" y="61.0" width="58.2" height="359.0" rx="4" fill="#34d399"/>
+<text x="1035.4" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w51</text>
+<rect x="1089.4" y="86.5" width="58.2" height="333.5" rx="4" fill="#6366f1"/>
+<text x="1118.5" y="444" fill="#a1a1aa" font-size="16" text-anchor="middle">w52</text>
+</svg>
