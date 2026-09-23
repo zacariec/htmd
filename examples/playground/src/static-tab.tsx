@@ -1,20 +1,16 @@
+import type { HtmdDiagnostic } from '@htmdjs/contracts';
 import { HtmdDoc } from '@htmdjs/react';
 import type { JSX } from 'react';
 import { useCallback, useDeferredValue, useState } from 'react';
-
-interface Diagnostic {
-  readonly severity: string;
-  readonly code: string;
-  readonly message: string;
-}
+import { playgroundHost } from './host.js';
 import { SAMPLE_HTMD } from './sample.js';
 
 export function StaticTab(): JSX.Element {
   const [source, setSource] = useState(SAMPLE_HTMD);
-  const [diagnostics, setDiagnostics] = useState<ReadonlyArray<Diagnostic>>([]);
+  const [diagnostics, setDiagnostics] = useState<ReadonlyArray<HtmdDiagnostic>>([]);
   const deferred = useDeferredValue(source);
 
-  const handleDiagnostics = useCallback((next: ReadonlyArray<Diagnostic>): void => {
+  const handleDiagnostics = useCallback((next: ReadonlyArray<HtmdDiagnostic>): void => {
     setDiagnostics(next);
   }, []);
 
@@ -38,7 +34,7 @@ export function StaticTab(): JSX.Element {
             <ul>
               {diagnostics.map((diagnostic) => (
                 <li
-                  key={`${diagnostic.code}-${diagnostic.severity}-${diagnostic.message}`}
+                  key={`${diagnostic.start}-${diagnostic.code}-${diagnostic.message}`}
                   data-severity={diagnostic.severity}
                 >
                   [{diagnostic.severity}] {diagnostic.code} — {diagnostic.message}
@@ -51,7 +47,7 @@ export function StaticTab(): JSX.Element {
       <section className="pane">
         <h2>Render</h2>
         <div className="render">
-          <HtmdDoc source={deferred} onDiagnostics={handleDiagnostics} />
+          <HtmdDoc source={deferred} host={playgroundHost} onDiagnostics={handleDiagnostics} />
         </div>
       </section>
     </>

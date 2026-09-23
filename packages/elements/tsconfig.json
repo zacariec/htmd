@@ -6,7 +6,7 @@
     "composite": true,
     "useDefineForClassFields": false
   },
-  "references": [{ "path": "../parser" }],
+  "references": [{ "path": "../contracts" }, { "path": "../parser" }],
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules"]
 }

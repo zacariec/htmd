@@ -1,3 +1,4 @@
+import { baseCatalog, createHost } from '@htmdjs/contracts';
 import { setHtmdElementsLogSink } from '@htmdjs/elements';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -38,6 +39,20 @@ describe('<HtmdDoc>', () => {
     expect(spy).toHaveBeenCalled();
     const diagnostics = spy.mock.calls[0]?.[0] as ReadonlyArray<{ code: string }>;
     expect(diagnostics.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders only components in the host catalog and reports contract diagnostics', () => {
+    const host = createHost({ components: baseCatalog.without('image-card') });
+    const spy = vi.fn();
+    const { container } = render(
+      <HtmdDoc source={`<image-card src="/x.png" alt="x"/>`} host={host} onDiagnostics={spy} />,
+    );
+
+    expect(container.querySelector('image-card')).toBeNull();
+    expect(container.querySelector('[data-htmd-fallback="image-card"]')).not.toBeNull();
+    expect(spy).toHaveBeenLastCalledWith([
+      expect.objectContaining({ code: 'unknown-component', tag: 'image-card' }),
+    ]);
   });
 
   it('forwards HTML attributes to the container div', () => {

@@ -8,7 +8,7 @@ import {
 import { Cursor } from './cursor.js';
 import { decodeEntities } from './decode-entities.js';
 import { isCustomElementTag } from './is-custom-element-tag.js';
-import { DiagnosticCode, DiagnosticSeverity } from './types.js';
+import { DEFAULT_RAW_TEXT_TAGS, DiagnosticCode, DiagnosticSeverity } from './types.js';
 import type { Diagnostic, ParseOptions } from './types.js';
 
 /**
@@ -21,8 +21,9 @@ import type { Diagnostic, ParseOptions } from './types.js';
  * Code fences (line-anchored, three or more backticks) and inline code spans
  * suppress tokenizing so a custom-element literal inside code stays markdown.
  *
- * `<htmd-fragment>` children are raw text: the JSON payload between the open
- * and close tags is never scanned for nested elements.
+ * Children of raw-text tags (`ParseOptions.rawTextTags`, by default
+ * `<htmd-fragment>` and `<code-block>`) are never scanned: everything up to the
+ * matching closing tag is one markdown token.
  *
  * The tokenizer reports forbidden constructs (`<script>`, `on*=` attributes,
  * `javascript:` URLs) as diagnostics. It never rewrites the source — the
@@ -85,8 +86,6 @@ const NEWLINE = '\n';
 const MIN_FENCE_LENGTH = 3;
 const MAX_FENCE_INDENT = 3;
 const JAVASCRIPT_SCHEME = 'javascript:';
-const FRAGMENT_TAG = 'htmd-fragment';
-const FRAGMENT_CLOSE = `</${FRAGMENT_TAG}`;
 
 const FORBIDDEN_TAGS: ReadonlySet<string> = new Set([
   'script',
@@ -120,6 +119,7 @@ export class Tokenizer {
     let markdownStart = 0;
     let pending = false;
     const streaming = options.streaming === true;
+    const rawTextTags = options.rawTextTags ?? DEFAULT_RAW_TEXT_TAGS;
     let inFence = false;
     let fenceLength = 0;
     let fenceMarker = BACKTICK;
@@ -211,8 +211,9 @@ export class Tokenizer {
       diagnostics.push(...scanned.diagnostics);
       markdownStart = cursor.position();
 
-      if (this.opensFragmentBody(scanned.token)) {
-        this.skipFragmentRawText(cursor, lowerSource);
+      const opened = scanned.token;
+      if (opened.kind === 'element-open' && !opened.selfClosing && rawTextTags.has(opened.tag)) {
+        this.skipRawText(cursor, lowerSource, opened.tag);
       }
     }
 
@@ -382,34 +383,32 @@ export class Tokenizer {
     });
   }
 
-  private opensFragmentBody(token: ElementOpenToken | ElementCloseToken): boolean {
-    return token.kind === 'element-open' && token.tag === FRAGMENT_TAG && !token.selfClosing;
-  }
-
   /**
-   * `<htmd-fragment>` children are a raw JSON payload. Jump the cursor to the
-   * matching close tag without scanning the payload for nested elements. The
+   * Raw-text children are an opaque payload. Jump the cursor to the closing
+   * tag for `tag` without scanning the payload for elements or code. The
    * skipped span flushes as a single markdown token when the close tag is
-   * scanned (or at EOF if the close tag is missing).
+   * scanned (or at EOF if the close tag is missing). A possible closing-tag
+   * prefix at EOF stops the skip so streaming can buffer it.
    */
-  private skipFragmentRawText(cursor: Cursor, lowerSource: string): void {
+  private skipRawText(cursor: Cursor, lowerSource: string, tag: string): void {
+    const close = `</${tag}`;
     let candidate = lowerSource.indexOf(TAG_OPEN, cursor.position());
     while (candidate !== -1) {
       if (
-        lowerSource.length - candidate < FRAGMENT_CLOSE.length &&
-        FRAGMENT_CLOSE.startsWith(lowerSource.slice(candidate))
+        lowerSource.length - candidate < close.length &&
+        close.startsWith(lowerSource.slice(candidate))
       ) {
         cursor.restore(candidate);
         return;
       }
-      if (lowerSource.startsWith(FRAGMENT_CLOSE, candidate)) {
+      if (lowerSource.startsWith(close, candidate)) {
         cursor.restore(candidate);
         const scanned = this.scanTag(cursor);
         if (
           scanned === 'incomplete' ||
           (scanned !== undefined &&
             scanned.token.kind === 'element-close' &&
-            scanned.token.tag === FRAGMENT_TAG)
+            scanned.token.tag === tag)
         ) {
           cursor.restore(candidate);
           return;

@@ -2,7 +2,11 @@ import { setHtmdElementsLogSink } from '@htmdjs/elements';
 import type { WireEvent } from '@htmdjs/wire';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { type HtmdStreamSource, useHtmdStream } from '../src/use-htmd-stream.js';
+import {
+  type HtmdStreamSource,
+  type UseHtmdStreamOptions,
+  useHtmdStream,
+} from '../src/use-htmd-stream.js';
 
 beforeAll(() => {
   setHtmdElementsLogSink({ warn: () => {}, error: () => {} });
@@ -13,8 +17,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function StreamHarness({ source }: { readonly source: HtmdStreamSource }): JSX.Element {
-  const { ref, status, error } = useHtmdStream(source);
+function StreamHarness({
+  source,
+  options,
+}: {
+  readonly source: HtmdStreamSource;
+  readonly options?: UseHtmdStreamOptions;
+}): JSX.Element {
+  const { ref, status, error } = useHtmdStream(source, options);
   return (
     <div>
       <div data-testid="host" ref={ref} />
@@ -317,5 +327,29 @@ describe('useHtmdStream', () => {
     expect(getByTestId('status').textContent).toBe('idle');
     expect(getByTestId('error').textContent).toBe('');
     expect(getByTestId('host').textContent).toBe('');
+  });
+
+  it('applies render limits by value without restarting on equal inline options', () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    const source = new FakeEventSource();
+    const typedSource = source as unknown as EventSource;
+    const { getByTestId, rerender } = render(
+      <StreamHarness source={typedSource} options={{ limits: { maxRegions: 1 } }} />,
+    );
+    act(() => {
+      for (const event of FIXTURE.slice(0, 3)) {
+        source.emit(event);
+      }
+    });
+    const region = getByTestId('host').firstElementChild;
+    rerender(<StreamHarness source={typedSource} options={{ limits: { maxRegions: 1 } }} />);
+    act(() => {
+      source.emit({ type: 'stream', seq: 3, target: '$.other', chunk: 'over the limit' });
+    });
+
+    expect(getByTestId('host').firstElementChild).toBe(region);
+    expect(getByTestId('status').textContent).toBe('error');
+    expect(getByTestId('error').textContent).toMatch(/limit of 1 regions/);
+    expect(getByTestId('host').textContent).toBe('hello');
   });
 });

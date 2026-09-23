@@ -15,6 +15,8 @@ return total / 100;</code-block>
 
 ## Data
 
+The playground host authorizes this endpoint and streams its rows in batches.
+
 <data-table src="/api/sales/q4"/>
 
 ## File

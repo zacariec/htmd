@@ -1,0 +1,49 @@
+{
+  "name": "@htmdjs/contracts",
+  "version": "0.1.0-alpha.2",
+  "description": "Component contracts, host capabilities, and validation for .htmd documents",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zacariec/htmd.git",
+    "directory": "packages/contracts"
+  },
+  "homepage": "https://github.com/zacariec/htmd#readme",
+  "bugs": {
+    "url": "https://github.com/zacariec/htmd/issues"
+  },
+  "keywords": ["htmd", "ai", "streaming", "components", "contracts", "validation"],
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@htmdjs/parser": "workspace:*",
+    "@htmdjs/wire": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -37,6 +37,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@htmdjs/contracts": "workspace:*",
     "@htmdjs/elements": "workspace:*",
     "@htmdjs/parser": "workspace:*",
     "@htmdjs/renderer": "workspace:*",

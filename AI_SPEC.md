@@ -1,38 +1,50 @@
 # `.htmd` — model spec
 
-Drop into a system prompt. `.htmd` is a document format for AI output: markdown for prose, custom HTML elements only when structure or interactivity is required.
+Drop into a system prompt. `.htmd` is a streaming document format: Markdown for prose, plus components from a library the host controls, used only when structure or interaction is required. Every component has a contract; content that breaks it is shown to the reader as plain text instead of a working component.
 
 ## Hard rules
 
-- Prose in **markdown** only. Never emit `<p>`, `<strong>`, `<em>`, `<ul>`, `<ol>`, `<li>`, `<h1>`–`<h6>`, `<a>`, `<img>`, `<blockquote>`, or `<table>` — markdown handles them.
-- Only tags with a hyphen are legal HTML (custom elements). Use the base set below or `<htmd-fragment>`.
-- Attribute values are double-quoted strings.
-- Every non-self-closing tag must be closed.
+- Prose in **Markdown** only. Never emit `<p>`, `<strong>`, `<em>`, `<ul>`, `<ol>`, `<li>`, `<h1>`–`<h6>`, `<a>`, `<img>`, `<blockquote>`, or `<table>` — Markdown handles them.
+- **Only use components the host lists.** The base set below is the default; a host may offer fewer or more. Any other tag renders as plain text.
+- Use only the attributes listed for each component. Unknown attributes are ignored.
+- Give every required attribute (marked `*`) a valid value. A missing or invalid attribute turns the component into plain text:
+  - `<choice-item>` needs a non-empty `value`, unique within its group.
+  - `<image-card>` needs `alt` (and `src`).
+  - `<refine-prompt>` `target` must be a region ID such as `$.answer` — `$` followed by dot-separated segments of letters, digits, `_`, or `-`.
+  - `<data-table>` needs `src`; `<file-preview>` needs `name`; `<chat-message>` needs `author`; `<choice-group>` needs `name`.
+- `<code-block>` content is literal: it is shown exactly as written, never as Markdown or components. Do not escape it.
+- `<htmd-fragment>` content must be one complete, valid JSON node. Partial or invalid JSON never renders.
+- Attribute values are double-quoted strings. Encode `"` inside a value as `&quot;`.
+- Close every non-self-closing tag. Choices, images, files, tables, refine prompts, and fragments appear only after their tag is complete, so finish each one promptly.
+- Nest components at most 64 levels deep.
 - No `<script>`, `<style>`, `<iframe>`, `<object>`, `<embed>`, `<link>`, `<meta>`, `<base>`, `<form>`.
 - No `on*` handlers, no `javascript:` URLs, no `data:` URLs.
-- Prefer three-backtick code fences. To show a custom-element literal without rendering it, put it inside a fence or inline code span.
+- A URL is a request, not permission. The host decides which images, links, downloads, and data may load. Do not invent data endpoints; use ones the host gave you.
+- Prefer three-backtick code fences. To show a component literally without rendering it, put it inside a fence or inline code span.
 - Chunks may end inside tags. The consumer buffers incomplete tag syntax; finish all tags and code fences before declaring completion.
 
-## Base elements
+## Base components
 
-Each entry: `tag(attrs) — children`.
+Each entry: `tag(attrs)` — `*` marks required attributes. Lengths are in characters.
 
-### `<chat-message author author-id? author-name? status? created-at?/>`
-Wraps a message. `author` is `user`/`agent`/`system`. `status` is `streaming`/`complete`/`failed`. Children are body content.
+### `<chat-message author* author-id? author-name? status? created-at?>`
+A message container. `author` is `user`, `agent`, or `system`. `status` is `streaming`, `complete`, or `failed`. `created-at` is an ISO 8601 timestamp with offset. Children are Markdown and components.
 ```
-<chat-message author="agent" author-name="Navigator" status="complete" created-at="2026-08-01T09:15:00Z">
-  Working on it now.
+<chat-message author="agent" author-name="Navigator" status="complete" created-at="2026-09-23T09:15:00Z">
+
+Working on it now.
+
 </chat-message>
 ```
 
-### `<data-table src/>`
-Fetches JSON `{ columns: string[], rows: object[] }` from `src`. Same-origin only unless the host opted in. Self-closing.
+### `<data-table src*/>`
+A table loaded by the host from `src` (`{ columns: string[], rows: object[] }`). The host must allow the data URL; otherwise the table shows as blocked. Optional `loading-text`, `empty-text`, `error-text` (≤200). Self-closing.
 ```
 <data-table src="/api/sales/q4"/>
 ```
 
-### `<choice-group name>` + `<choice-item value>`
-A radio-style choice. Group emits a `choice` event. `value` is required on items.
+### `<choice-group name*>` + `<choice-item value*>`
+A single-selection choice. `name` starts with a letter, then letters, digits, `_`, or `-` (≤64). Items contain only a Markdown label; the group contains only items. Selecting emits a `choice` event to the host. Optional group `value` preselects a choice.
 ```
 <choice-group name="next-step">
   <choice-item value="dig">Dig into the top performer</choice-item>
@@ -41,39 +53,37 @@ A radio-style choice. Group emits a `choice` event. `value` is required on items
 ```
 
 ### `<code-block language? show-copy?>`
-A code sample with header + optional copy button. Put the code in the slot.
+Literal code with an optional copy button. `language` is a short label such as `ts` or `c++`; `show-copy` is `true` or `false`. The content is the code.
 ```
-<code-block language="ts">
-const total = cart.lines.reduce((sum, line) => sum + line.priceCents, 0);
-</code-block>
+<code-block language="ts">const total = cart.lines.reduce((sum, line) => sum + line.priceCents, 0);</code-block>
 ```
 
-### `<image-card src alt width height caption?/>`
-Image with reserved aspect ratio. **`width` and `height` are required** — CLS depends on them. Self-closing.
+### `<image-card src* alt* width? height? caption?/>`
+An image with alternative text. Give `width` and `height` in pixels when known so space is reserved before it loads. Self-closing.
 ```
-<image-card src="/charts/q4.png" alt="Q4 revenue" width="1200" height="675" caption="Weekly revenue, w40-w52"/>
+<image-card src="/charts/q4.png" alt="Q4 revenue by week" width="1200" height="675" caption="Weekly revenue, w40-w52"/>
 ```
 
-### `<file-preview name mime size-bytes? href?/>`
-A file reference with a download link. Self-closing.
+### `<file-preview name* mime? size-bytes? href?/>`
+A file reference with an optional download link. `mime` looks like `application/pdf`; `size-bytes` is a whole number. Self-closing.
 ```
 <file-preview name="q4-full-report.pdf" mime="application/pdf" size-bytes="482133" href="/files/q4-full-report.pdf"/>
 ```
 
-### `<refine-prompt target placeholder? submit-label? working-label?></refine-prompt>`
-Attaches a textarea to a region id. On submit, emits a `refine` event with `{ target, prompt }`.
+### `<refine-prompt target* placeholder? submit-label? working-label?/>`
+A revision box for the region named by `target`. Submitting sends the host a `refine` event with `{ target, prompt }`. Self-closing.
 ```
-<refine-prompt target="$.msg.body"></refine-prompt>
+<refine-prompt target="$.answer"/>
 ```
 
-### `<htmd-fragment kind state?>`
-The escape hatch. Body is a JSON payload the renderer walks. Use only when no named element fits.
+### `<htmd-fragment kind? state?>`
+The escape hatch. Use only when no named component fits. The content is one JSON node; `state` is a JSON object (HTML-encode its quotes).
 
 Node shape: `{ tag, class?, text?, for?, attrs?, children? }`.
-- Whitelisted native tags: `div`, `span`, `h2`–`h4`, `ul`, `ol`, `li`, `img`, `a` (+ any registered custom element).
-- `text` interpolates `{{key}}` from the fragment's `state`.
-- `for="item in list"` loops (list resolved from `state`), bounded at 1000 items.
-- URL attributes (`src`, `href`) sanitized. `on*` and `style` dropped.
+- Allowed native tags: `div`, `span`, `h2`–`h4`, `ul`, `ol`, `li`, `img`, `a`, plus components the host lists.
+- `text` interpolates `{{key}}` from `state`.
+- `for: "item in list"` repeats a node for each item of a list in `state` (at most 1000).
+- URL attributes (`src`, `href`) are checked by the host. `on*` and `style` are dropped.
 
 ```
 <htmd-fragment kind="card" state="{&quot;title&quot;:&quot;Highlights&quot;,&quot;items&quot;:[&quot;w51 best&quot;,&quot;w49 worst&quot;]}">
@@ -104,29 +114,32 @@ One JSON object per event. `seq` is monotonic per document.
 | `doc-done` | `{ type, seq, id }` |
 | `error` | `{ type, seq, message, recoverable, region? }` |
 
-Region ids are `$`-rooted dot paths: `$.msg.body.tool-1`. Declare regions first, `stream` markdown/HTML into them, `region-done` when finished, `region-replace` for revisions.
+Region ids are `$`-rooted dot paths: `$.msg.body.tool-1`. Declare regions first, `stream` Markdown and components into them, `region-done` when finished, `region-replace` for revisions.
 
 - Open with `schemaVersion: "0.1"` and finish with `doc-done` using the same document ID.
 - `region-done` seals the region and its actual descendants. Do not append to a sealed region or create children beneath it.
 - `region-replace` is the explicit revision operation: it removes descendants and reopens that region while its ancestors and document are still open.
 - After `doc-done` or a fatal error, start a new consumer context; do not continue the old document.
 - Use globally increasing `seq` values on an ordered transport. Replays are ignored; independent producers need a shared sequencer.
+- Stay within the host's limits (by default 1000 regions, region depth 32, 1 MB per region, 4 MB per document). Exceeding one ends the document.
 - Standard Markdown is provisional until completion. Do not rely on incomplete emphasis/link syntax having a finalized appearance.
-- Choice/refine events are handled by the host. Replacing a region intentionally discards its local interaction state; appending prose does not.
+- Point `<refine-prompt target>` at a region you declared. Choice/refine events are handled by the host and report the region they came from. Replacing a region intentionally discards its local interaction state; appending prose does not.
 
 ## Anti-patterns
 
-- Wrap prose in `<div>` / `<span>` — use markdown.
+- Wrap prose in `<div>` / `<span>` — use Markdown.
   - ✗ `<div>Hello **world**</div>`
   - ✓ `Hello **world**`
 - Emit `<button>` / `<input>` — use `<choice-group>` / `<refine-prompt>` / `<htmd-fragment>`.
-- Repeat the same table with `<html>` — use `<data-table src>`.
+- Paste a large table as HTML — use `<data-table src>` with an endpoint the host provides.
 - Encode structured intent as prose — use `<htmd-fragment>` with a real node.
 - Rely on JS in the payload — `<htmd-fragment>` is pure data.
+- Invent attributes (`sort`, `page-size`, `style`) — they are ignored.
+- Refine a prose description (`target="the answer"`) — use a region ID (`target="$.answer"`).
 
 ## Worked example
 
-```
+````
 Looking at Q4 now.
 
 ## What the data says
@@ -152,5 +165,5 @@ const corrected = invoices.filter((invoice) => !invoice.voided);
   <choice-item value="deep-dive">Deep-dive on w49</choice-item>
 </choice-group>
 
-<refine-prompt target="$.msg.body"></refine-prompt>
-```
+<refine-prompt target="$.msg.body"/>
+````

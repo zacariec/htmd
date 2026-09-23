@@ -1,9 +1,18 @@
+import {
+  baseCatalog,
+  createHost,
+  defaultHost,
+  provideHtmdHost,
+  requestHtmdHost,
+} from '@htmdjs/contracts';
+import type { ContractDiagnostic, HtmdHost } from '@htmdjs/contracts';
 import { registerHtmdElements } from '@htmdjs/elements';
 import type { ChoiceGroup, ChoiceItem, DataTable, RefinePrompt } from '@htmdjs/elements';
 import { Parser } from '@htmdjs/parser';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderMarkdown } from '../src/markdown.js';
 import { applySafeAttrs, materializeInto, renderHtmdSource } from '../src/materialize.js';
+import { testContract } from './helpers.js';
 
 let stage: HTMLDivElement;
 
@@ -88,7 +97,7 @@ describe('renderHtmdSource', () => {
   });
 
   it('never sets on* attributes', () => {
-    renderHtmdSource(stage, '<image-card onerror="alert(1)" src="/x.png"/>');
+    renderHtmdSource(stage, '<image-card onerror="alert(1)" src="/x.png" alt="x"/>');
 
     expect(stage.querySelector('image-card')?.getAttribute('onerror')).toBeNull();
   });
@@ -99,12 +108,70 @@ describe('renderHtmdSource', () => {
     expect(stage.querySelector('script')).toBeNull();
     expect(stage.textContent).toContain('<script>alert(1)</script>');
   });
+
+  it('renders fallbacks as text projections without instantiating nested components', () => {
+    const payload = '{"tag": "div", <image-card src="/x.png" alt="x"/>';
+    const result = renderHtmdSource(
+      stage,
+      [
+        '<x-unknown>Intro <image-card src="/x.png" alt="x"/> and',
+        '<choice-group name="q"><choice-item value="a">**Pick**</choice-item></choice-group></x-unknown>',
+        '',
+        '<image-card src="/x.png" alt="x" data-htmd-version="2"/>',
+        '',
+        `<htmd-fragment>${payload}</htmd-fragment>`,
+        '',
+        '<script>alert(1)</script>',
+      ].join('\n'),
+    );
+
+    expect(
+      stage.querySelector('x-unknown, image-card, choice-group, choice-item, htmd-fragment'),
+    ).toBeNull();
+    const unknown = stage.querySelector('[data-htmd-fallback="x-unknown"]');
+    expect(unknown?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Intro and Pick');
+    expect(unknown?.querySelector('strong')?.textContent).toBe('Pick');
+    expect(stage.querySelector('[data-htmd-fallback="image-card"]')?.childNodes).toHaveLength(0);
+    expect(stage.querySelector('[data-htmd-fallback="htmd-fragment"] > pre')?.textContent).toBe(
+      payload,
+    );
+    // Parser diagnostics first, then contract diagnostics in document order.
+    const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+    expect(new Set(codes.slice(0, -3))).toEqual(new Set(['forbidden-tag']));
+    expect(codes.slice(-3)).toEqual([
+      'unknown-component',
+      'unsupported-component-version',
+      'component-rule',
+    ]);
+  });
+
+  it('provides the host and parses its text components as raw text', () => {
+    const host = createHost({
+      components: baseCatalog.with(testContract('raw-probe', { children: { kind: 'text' } })),
+    });
+    const raw = '**a** <image-card src="/x.png" alt="x"/>';
+    const result = renderHtmdSource(stage, `<raw-probe>${raw}</raw-probe>`, { host });
+
+    const probe = stage.querySelector('raw-probe');
+    if (probe === null) throw new Error('Missing raw probe');
+    expect(probe.textContent).toBe(raw);
+    expect(probe.children).toHaveLength(0);
+    expect(result.diagnostics).toEqual([]);
+    expect(requestHtmdHost(probe)).toBe(host);
+  });
 });
 
 describe('materializeInto', () => {
-  function render(source: string, streaming = true): void {
-    const parsed = Parser.getInstance().parse(source, { streaming });
-    materializeInto(stage, parsed.document.nodes, { streaming });
+  function render(
+    source: string,
+    streaming = true,
+    host: HtmdHost = defaultHost,
+  ): readonly ContractDiagnostic[] {
+    const parsed = Parser.getInstance().parse(source, {
+      streaming,
+      rawTextTags: host.components.rawTextTags(),
+    });
+    return materializeInto(stage, parsed.document.nodes, { streaming, host });
   }
 
   it('retains selected choices, shadow DOM, and siblings while prose grows and finalizes', async () => {
@@ -158,7 +225,7 @@ describe('materializeInto', () => {
   });
 
   it('preserves focused refine text and selection through streaming and finalization', async () => {
-    const source = '<refine-prompt target="answer"/>\n\nWorking';
+    const source = '<refine-prompt target="$.answer"/>\n\nWorking';
     render(source);
     const prompt = stage.querySelector('refine-prompt') as RefinePrompt;
     await prompt.updateComplete;
@@ -185,8 +252,10 @@ describe('materializeInto', () => {
       json: async () => ({ columns: ['name'], rows: [{ name: 'Retained row' }] }),
     });
     vi.stubGlobal('fetch', fetchMock);
+    const host = createHost({ components: baseCatalog, authorizeUrl: () => true });
+    provideHtmdHost(stage, host);
     const source = '<data-table src="/api/data"/>';
-    render(source);
+    render(source, true, host);
     const table = stage.querySelector('data-table') as DataTable;
     await vi.waitFor(async () => {
       await table.updateComplete;
@@ -194,8 +263,8 @@ describe('materializeInto', () => {
     });
     const row = table.shadowRoot?.querySelector('tbody tr');
 
-    render(`${source}\n\nMore prose.`);
-    render(`${source}\n\nMore prose.`, false);
+    render(`${source}\n\nMore prose.`, true, host);
+    render(`${source}\n\nMore prose.`, false, host);
     await table.updateComplete;
 
     expect(stage.querySelector('data-table')).toBe(table);
@@ -256,40 +325,96 @@ describe('materializeInto', () => {
     expect(fragment.querySelector('strong')).toBeNull();
   });
 
-  it('reinterprets provisional nested code on finalization without replacing its parent', () => {
-    const source = '<probe-holder>`<probe-child>text</probe-child></probe-holder>';
-    render(source);
-    const holder = stage.querySelector('probe-holder');
-    expect(stage.querySelector('probe-child')).toBeNull();
-    render(source, false);
-    expect(stage.querySelector('probe-holder')).toBe(holder);
-    expect(stage.querySelector('probe-child')?.textContent).toBe('text');
-    const fresh = document.createElement('div');
-    renderHtmdSource(fresh, source);
-    expect(stage.innerHTML).toBe(fresh.innerHTML);
+  it('applies initial-owned attributes only at creation and keeps reconciling source-owned ones', () => {
+    const choices = '<choice-item value="a">A</choice-item><choice-item value="b">B</choice-item>';
+    render(`<choice-group name="q" value="a">${choices}</choice-group>`);
+    const group = stage.querySelector('choice-group');
+    render(`<choice-group name="question" value="b">${choices}</choice-group>`);
+
+    expect(stage.querySelector('choice-group')).toBe(group);
+    expect(group?.getAttribute('name')).toBe('question');
+    expect(group?.getAttribute('value')).toBe('a');
+
+    render(`<choice-group name="question">${choices}</choice-group>`, false);
+    expect(group?.getAttribute('value')).toBe('a');
   });
 
-  it('constructs only live custom elements and resets after explicit container clearing', () => {
-    let constructed = 0;
+  it('defers a streaming choice until its closing tag, then renders it in place', () => {
+    const values = (): (string | null)[] =>
+      Array.from(stage.querySelectorAll('choice-item'), (item) => item.getAttribute('value'));
+    const partial =
+      '<choice-group name="q"><choice-item value="a">Alpha</choice-item><choice-item value="b">Be';
+    expect(render(partial)).toEqual([]);
+    const group = stage.querySelector('choice-group');
+    const first = stage.querySelector('choice-item');
+    expect(values()).toEqual(['a']);
+    expect(stage.textContent).not.toContain('Be');
+
+    render(`${partial}ta</choice-item>`);
+    expect(stage.querySelector('choice-group')).toBe(group);
+    expect(stage.querySelector('choice-item')).toBe(first);
+    expect(values()).toEqual(['a', 'b']);
+
+    const diagnostics = render(partial, false);
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['incomplete-component']);
+    expect(values()).toEqual(['a']);
+    expect(stage.querySelector('choice-item')).toBe(first);
+    expect(group?.querySelector('[data-htmd-fallback="choice-item"]')?.textContent?.trim()).toBe(
+      'Be',
+    );
+  });
+
+  it('never instantiates a registered custom element outside the host catalog', () => {
+    let connected = 0;
     customElements.define(
-      'materialize-probe',
+      'catalog-probe',
       class extends HTMLElement {
-        constructor() {
-          super();
-          constructed += 1;
+        connectedCallback(): void {
+          connected += 1;
         }
       },
     );
-    render('<materialize-probe/>');
-    const first = stage.firstElementChild;
-    render('<materialize-probe/>\n\nOne');
-    render('<materialize-probe/>\n\nOne more', false);
-    expect(constructed).toBe(1);
-    expect(stage.firstElementChild).toBe(first);
+
+    const diagnostics = render('<catalog-probe>Some **text**</catalog-probe>', false);
+    expect(stage.querySelector('catalog-probe')).toBeNull();
+    expect(connected).toBe(0);
+    expect(stage.querySelector('[data-htmd-fallback="catalog-probe"] strong')?.textContent).toBe(
+      'text',
+    );
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['unknown-component']);
+
+    const host = createHost({ components: baseCatalog.with(testContract('catalog-probe')) });
+    render('<catalog-probe>Some</catalog-probe>', true, host);
+    const probe = stage.querySelector('catalog-probe');
+    render('<catalog-probe>Some **text**</catalog-probe>\n\nMore', true, host);
+    render('<catalog-probe>Some **text**</catalog-probe>\n\nMore', false, host);
+    expect(connected).toBe(1);
+    expect(stage.querySelector('catalog-probe')).toBe(probe);
+    expect(probe?.querySelector('strong')?.textContent).toBe('text');
 
     stage.replaceChildren();
-    render('<materialize-probe/>\n\nNew document');
-    expect(constructed).toBe(2);
-    expect(stage.firstElementChild).not.toBe(first);
+    render('<catalog-probe>New document</catalog-probe>', true, host);
+    expect(connected).toBe(2);
+    expect(stage.querySelector('catalog-probe')).not.toBe(probe);
+  });
+
+  it('reinterprets provisional nested code on finalization without replacing its parent', () => {
+    const host = createHost({
+      components: baseCatalog.with(
+        testContract('probe-holder'),
+        testContract('probe-child', { children: { kind: 'markdown' } }),
+      ),
+    });
+    const source = '<probe-holder>`<probe-child>text</probe-child></probe-holder>';
+    render(source, true, host);
+    const holder = stage.querySelector('probe-holder');
+    expect(holder).not.toBeNull();
+    expect(stage.querySelector('probe-child')).toBeNull();
+    render(source, false, host);
+    expect(stage.querySelector('probe-holder')).toBe(holder);
+    expect(stage.querySelector('probe-child')?.textContent).toBe('text');
+    const fresh = document.createElement('div');
+    renderHtmdSource(fresh, source, { host });
+    expect(stage.innerHTML).toBe(fresh.innerHTML);
   });
 });

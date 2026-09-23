@@ -1,6 +1,8 @@
 export { renderMarkdown } from './markdown.js';
 export { applySafeAttrs, materializeInto, renderHtmdSource } from './materialize.js';
-export { RegionTreeRenderer } from './region-tree-renderer.js';
+export type { MaterializeOptions, RenderResult } from './materialize.js';
+export { DEFAULT_RENDER_LIMITS, RegionTreeRenderer } from './region-tree-renderer.js';
+export type { RegionTreeRendererOptions, RenderLimits } from './region-tree-renderer.js';
 export { RendererEvents } from './renderer-events.js';
 export type {
   DocDoneDetail,

@@ -1,5 +1,7 @@
-import { RegionTreeRenderer, RendererEvents } from '@htmdjs/renderer';
-import type { RendererErrorDetail } from '@htmdjs/renderer';
+import { defaultHost } from '@htmdjs/contracts';
+import type { HtmdHost } from '@htmdjs/contracts';
+import { DEFAULT_RENDER_LIMITS, RegionTreeRenderer, RendererEvents } from '@htmdjs/renderer';
+import type { RenderLimits, RendererErrorDetail } from '@htmdjs/renderer';
 import type { WireEvent } from '@htmdjs/wire';
 import { type RefCallback, useCallback, useEffect, useState } from 'react';
 
@@ -21,6 +23,16 @@ export type HtmdStreamSource =
   | Iterable<WireEvent>
   | EventSource;
 
+export interface UseHtmdStreamOptions {
+  /**
+   * Which components may render and what they may load. Defaults to
+   * `defaultHost`. Keep its identity stable: a new host restarts the stream.
+   */
+  readonly host?: HtmdHost;
+  /** Overrides individual `DEFAULT_RENDER_LIMITS`; compared by value. */
+  readonly limits?: Partial<RenderLimits>;
+}
+
 export interface UseHtmdStreamResult {
   /** Attach to the container `<div>` that will host the region tree. */
   readonly ref: RefCallback<HTMLDivElement>;
@@ -35,9 +47,21 @@ export interface UseHtmdStreamResult {
  * - `idle` before the first event.
  * - `streaming` from the first event until protocol completion.
  * - `done` only when the renderer accepts `doc-done`.
- * - `error` on interruption, transport failure, or a non-recoverable renderer error.
+ * - `error` on interruption, transport failure, or a non-recoverable renderer
+ *   error (including an exceeded render limit).
+ *
+ * Changing `source`, `host`, or a limit value restarts rendering.
  */
-export function useHtmdStream(source: HtmdStreamSource): UseHtmdStreamResult {
+export function useHtmdStream(
+  source: HtmdStreamSource,
+  options: UseHtmdStreamOptions = {},
+): UseHtmdStreamResult {
+  const host = options.host ?? defaultHost;
+  // Limits are compared by value so an inline options object does not restart the stream.
+  const { maxRegions, maxRegionDepth, maxRegionBytes, maxDocumentBytes } = {
+    ...DEFAULT_RENDER_LIMITS,
+    ...options.limits,
+  };
   const [status, setStatus] = useState<HtmdStreamStatus>('idle');
   const [error, setError] = useState<string | undefined>(undefined);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -52,7 +76,10 @@ export function useHtmdStream(source: HtmdStreamSource): UseHtmdStreamResult {
       return;
     }
     ensureHtmdElementsRegistered();
-    const renderer = new RegionTreeRenderer(container);
+    const renderer = new RegionTreeRenderer(container, {
+      host,
+      limits: { maxRegions, maxRegionDepth, maxRegionBytes, maxDocumentBytes },
+    });
     renderer.reset();
 
     let stopped = false;
@@ -124,7 +151,7 @@ export function useHtmdStream(source: HtmdStreamSource): UseHtmdStreamResult {
       renderer.removeEventListener(RendererEvents.Error, handleError);
       renderer.removeEventListener(RendererEvents.DocDone, handleDone);
     };
-  }, [source, container]);
+  }, [source, container, host, maxRegions, maxRegionDepth, maxRegionBytes, maxDocumentBytes]);
 
   return { ref, status, error };
 }

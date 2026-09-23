@@ -1,6 +1,7 @@
+import { ComponentEvents, baseCatalog, createHost } from '@htmdjs/contracts';
+import type { ChoiceDetail, RefineDetail } from '@htmdjs/contracts';
 import {
   ChatMessage,
-  HtmdElementEvents,
   HtmdFragment,
   registerHtmdElements,
   setHtmdElementsLogSink,
@@ -38,7 +39,10 @@ beforeEach(() => {
   document.body.innerHTML = '';
   root = document.createElement('div');
   document.body.appendChild(root);
-  renderer = new RegionTreeRenderer(root);
+  // Fixture documents load table data; the default host never authorizes data.
+  renderer = new RegionTreeRenderer(root, {
+    host: createHost({ components: baseCatalog, authorizeUrl: () => true }),
+  });
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue({
@@ -175,7 +179,7 @@ describe('06-refine-loop', () => {
     await settle();
 
     const refineSpy = vi.fn();
-    root.addEventListener(HtmdElementEvents.Refine, refineSpy as EventListener, { once: true });
+    root.addEventListener(ComponentEvents.Refine, refineSpy as EventListener, { once: true });
 
     const prompt = region('$.msg.body').querySelector('refine-prompt');
     const promptElement = prompt as HTMLElement & {
@@ -192,8 +196,8 @@ describe('06-refine-loop', () => {
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 
     expect(refineSpy).toHaveBeenCalledTimes(1);
-    const event = refineSpy.mock.calls[0]?.[0] as CustomEvent<{ target: string; prompt: string }>;
-    expect(event.detail).toEqual({ target: '$.msg.body', prompt: 'tighter' });
+    const event = refineSpy.mock.calls[0]?.[0] as CustomEvent<RefineDetail>;
+    expect(event.detail).toEqual({ target: '$.msg.body', prompt: 'tighter', region: '$.msg.body' });
   });
 });
 
@@ -203,7 +207,7 @@ describe('07-choice-selection', () => {
     await settle();
 
     const choiceSpy = vi.fn();
-    root.addEventListener(HtmdElementEvents.Choice, choiceSpy as EventListener, { once: true });
+    root.addEventListener(ComponentEvents.Choice, choiceSpy as EventListener, { once: true });
 
     const items = region('$.msg.body').querySelectorAll('choice-item');
     expect(items).toHaveLength(3);
@@ -216,8 +220,8 @@ describe('07-choice-selection', () => {
     exportItem.shadowRoot.querySelector('button')?.click();
 
     expect(choiceSpy).toHaveBeenCalledTimes(1);
-    const event = choiceSpy.mock.calls[0]?.[0] as CustomEvent<{ name: string; value: string }>;
-    expect(event.detail).toEqual({ name: 'next-step', value: 'export' });
+    const event = choiceSpy.mock.calls[0]?.[0] as CustomEvent<ChoiceDetail>;
+    expect(event.detail).toEqual({ name: 'next-step', value: 'export', region: '$.msg.body' });
   });
 });
 

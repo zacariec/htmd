@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@htmdjs/contracts": "workspace:*",
     "@htmdjs/elements": "workspace:*",
     "@htmdjs/renderer": "workspace:*"
   },

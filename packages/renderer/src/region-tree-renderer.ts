@@ -1,5 +1,6 @@
-import { Parser, isCustomElementTag } from '@htmdjs/parser';
-import type { Diagnostic } from '@htmdjs/parser';
+import { defaultHost, provideHtmdHost, resolveComponent } from '@htmdjs/contracts';
+import type { HtmdDiagnostic, HtmdHost } from '@htmdjs/contracts';
+import { DiagnosticSeverity, Parser, isCustomElementTag } from '@htmdjs/parser';
 import { safeParseWireEvent } from '@htmdjs/wire';
 import type {
   DocDoneEvent,
@@ -47,7 +48,16 @@ import type {
  * - `doc-done` finalizes every region; it and fatal errors close the document.
  *   New events require `reset`, while accepted-sequence replays stay no-ops.
  * - Incomplete streamed syntax is exposed via `data-htmd-pending`; completion
- *   reparses with final semantics and reports diagnostics via RegionUpdated.
+ *   reparses with final semantics and reports parser and contract diagnostics
+ *   via RegionUpdated.
+ * - The host (default `defaultHost`) is provided on the root. Its catalog
+ *   decides which components region content and custom-element region tags
+ *   may instantiate. A region tag must be an available component accepting
+ *   flow content; otherwise the region is a `div` and a recoverable error is
+ *   reported.
+ * - `RenderLimits` bound regions, region depth, and buffered source. An event
+ *   that would exceed a limit is rejected with a non-recoverable error and
+ *   closes the document.
  *
  * Lifecycle hooks dispatch from the renderer itself (`EventTarget`).
  */
@@ -62,17 +72,52 @@ const PENDING_ATTR = 'data-htmd-pending';
  * back to `div` with a recoverable error. */
 const SAFE_NATIVE_REGION_TAGS: ReadonlySet<string> = new Set(['div', 'span', 'section', 'article']);
 
+export interface RenderLimits {
+  /** Regions a document may create, implicit ones included; the root is not counted. */
+  readonly maxRegions: number;
+  /** Deepest region nesting below the root, following actual parents. */
+  readonly maxRegionDepth: number;
+  /** UTF-8 bytes of one region's buffered source. */
+  readonly maxRegionBytes: number;
+  /** UTF-8 bytes of all live regions' buffered source together. */
+  readonly maxDocumentBytes: number;
+}
+
+export const DEFAULT_RENDER_LIMITS: RenderLimits = Object.freeze({
+  maxRegions: 1000,
+  maxRegionDepth: 32,
+  maxRegionBytes: 1_000_000,
+  maxDocumentBytes: 4_000_000,
+});
+
+export interface RegionTreeRendererOptions {
+  /** Governs which components render and what they may do. Defaults to `defaultHost`. */
+  readonly host?: HtmdHost;
+  /** Overrides individual `DEFAULT_RENDER_LIMITS`. */
+  readonly limits?: Partial<RenderLimits>;
+}
+
 interface RegionState {
   readonly id: string;
   readonly element: HTMLElement;
   readonly parentId: string | undefined;
+  /** Parent-chain length; the root is 0. */
+  readonly depth: number;
   contentElement: HTMLElement | undefined;
   buffer: string;
+  /** UTF-8 length of `buffer`. */
+  bytes: number;
   done: boolean;
 }
 
 export class RegionTreeRenderer extends EventTarget {
   private readonly regions = new Map<string, RegionState>();
+
+  private readonly host: HtmdHost;
+
+  private readonly limits: RenderLimits;
+
+  private readonly rawTextTags: ReadonlySet<string>;
 
   private lastSeq: number = -1;
 
@@ -80,8 +125,17 @@ export class RegionTreeRenderer extends EventTarget {
 
   private closed = false;
 
-  public constructor(private readonly root: HTMLElement) {
+  private documentBytes = 0;
+
+  public constructor(
+    private readonly root: HTMLElement,
+    options: RegionTreeRendererOptions = {},
+  ) {
     super();
+    this.host = options.host ?? defaultHost;
+    this.limits = { ...DEFAULT_RENDER_LIMITS, ...options.limits };
+    this.rawTextTags = this.host.components.rawTextTags();
+    provideHtmdHost(root, this.host);
     this.registerRoot();
   }
 
@@ -111,6 +165,7 @@ export class RegionTreeRenderer extends EventTarget {
     this.lastSeq = -1;
     this.docId = undefined;
     this.closed = false;
+    this.documentBytes = 0;
   }
 
   /**
@@ -136,15 +191,18 @@ export class RegionTreeRenderer extends EventTarget {
     if (rejection !== undefined) {
       this.emit<RendererErrorDetail>(RendererEvents.Error, {
         message: rejection,
-        regionId:
-          event.type === 'stream'
-            ? event.target
-            : event.type === 'region' ||
-                event.type === 'region-done' ||
-                event.type === 'region-replace'
-              ? event.id
-              : undefined,
+        regionId: regionIdOf(event),
         recoverable: true,
+      });
+      return false;
+    }
+    const violation = this.limitViolation(event);
+    if (violation !== undefined) {
+      this.closed = true;
+      this.emit<RendererErrorDetail>(RendererEvents.Error, {
+        message: violation,
+        regionId: regionIdOf(event),
+        recoverable: false,
       });
       return false;
     }
@@ -204,6 +262,91 @@ export class RegionTreeRenderer extends EventTarget {
     }
     const id = event.type === 'stream' ? event.target : event.id;
     return this.closedAncestor(event.type === 'region-replace' ? this.parentIdOf(id) : id);
+  }
+
+  /**
+   * Limits bound what one stream can make the renderer hold. Exceeding one is
+   * fatal: dropping the event would silently render an incomplete document.
+   */
+  private limitViolation(event: WireEvent): string | undefined {
+    let id: string;
+    let planned: { readonly created: number; readonly depth: number };
+    let regionBytes = 0;
+    let documentBytes = this.documentBytes;
+    switch (event.type) {
+      case 'region': {
+        if (this.regions.has(event.id)) {
+          return undefined;
+        }
+        const parent = this.plan(event.parent ?? parentPathOf(event.id));
+        id = event.id;
+        planned = { created: parent.created + 1, depth: parent.depth + 1 };
+        break;
+      }
+      case 'stream': {
+        const chunkBytes = utf8Length(event.chunk);
+        id = event.target;
+        planned = this.plan(id);
+        regionBytes = (this.regions.get(id)?.bytes ?? 0) + chunkBytes;
+        documentBytes += chunkBytes;
+        break;
+      }
+      case 'region-replace':
+        id = event.id;
+        planned = this.plan(id);
+        regionBytes = utf8Length(event.body);
+        documentBytes += regionBytes - this.subtreeBytes(id);
+        break;
+      case 'region-done':
+        id = event.id;
+        planned = this.plan(id);
+        break;
+      default:
+        return undefined;
+    }
+
+    const limits = this.limits;
+    if (this.regions.size - 1 + planned.created > limits.maxRegions) {
+      return `region "${id}" would exceed the limit of ${limits.maxRegions} regions`;
+    }
+    if (planned.created > 0 && planned.depth > limits.maxRegionDepth) {
+      return `region "${id}" would nest ${planned.depth} levels deep; the limit is ${limits.maxRegionDepth}`;
+    }
+    if (regionBytes > limits.maxRegionBytes) {
+      return `region "${id}" would buffer ${regionBytes} bytes; the limit is ${limits.maxRegionBytes}`;
+    }
+    if (documentBytes > limits.maxDocumentBytes) {
+      return `document would buffer ${documentBytes} bytes; the limit is ${limits.maxDocumentBytes}`;
+    }
+    return undefined;
+  }
+
+  /** Regions `ensureRegion(id)` would create, and the depth `id` would have. */
+  private plan(id: string): { readonly created: number; readonly depth: number } {
+    let created = 0;
+    let current = id;
+    let existing = this.regions.get(current);
+    while (existing === undefined) {
+      created += 1;
+      current = parentPathOf(current);
+      existing = this.regions.get(current);
+    }
+    return { created, depth: existing.depth + created };
+  }
+
+  /** Buffered bytes of a region and its actual descendants. */
+  private subtreeBytes(id: string): number {
+    const region = this.regions.get(id);
+    if (region === undefined) {
+      return 0;
+    }
+    let bytes = 0;
+    for (const state of this.regions.values()) {
+      if (region.element.contains(state.element)) {
+        bytes += state.bytes;
+      }
+    }
+    return bytes;
   }
 
   private parentIdOf(id: string): string | undefined {
@@ -277,8 +420,10 @@ export class RegionTreeRenderer extends EventTarget {
       id: event.id,
       element,
       parentId: parent.id,
+      depth: parent.depth + 1,
       contentElement: undefined,
       buffer: '',
+      bytes: 0,
       done: false,
     };
     this.regions.set(event.id, state);
@@ -288,7 +433,10 @@ export class RegionTreeRenderer extends EventTarget {
 
   private handleStream(event: StreamEvent): void {
     const region = this.ensureRegion(event.target);
+    const bytes = utf8Length(event.chunk);
     region.buffer += event.chunk;
+    region.bytes += bytes;
+    this.documentBytes += bytes;
     this.renderAndNotify(region);
   }
 
@@ -307,13 +455,17 @@ export class RegionTreeRenderer extends EventTarget {
     for (const [id, child] of this.regions) {
       if (child !== region && region.element.contains(child.element)) {
         this.regions.delete(id);
+        this.documentBytes -= child.bytes;
       }
     }
 
+    const bytes = utf8Length(event.body);
     region.element.replaceChildren();
     region.element.removeAttribute(DONE_ATTR);
     region.contentElement = undefined;
     region.buffer = event.body;
+    this.documentBytes += bytes - region.bytes;
+    region.bytes = bytes;
     region.done = false;
     this.renderAndNotify(region);
 
@@ -363,8 +515,10 @@ export class RegionTreeRenderer extends EventTarget {
       id,
       element,
       parentId: parent.id,
+      depth: parent.depth + 1,
       contentElement: undefined,
       buffer: '',
+      bytes: 0,
       done: false,
     };
     this.regions.set(id, state);
@@ -373,22 +527,65 @@ export class RegionTreeRenderer extends EventTarget {
     return state;
   }
 
+  /**
+   * Custom-element region tags resolve through the host catalog like any
+   * source element and receive validated attributes only. A region holds
+   * streamed flow content, so its component must accept flow children.
+   */
   private createRegionElement(
     tag: string,
     attrs: Readonly<Record<string, string>>,
     id: string,
   ): HTMLElement {
-    const safe = isCustomElementTag(tag) || SAFE_NATIVE_REGION_TAGS.has(tag);
-    if (!safe) {
-      this.emit<RendererErrorDetail>(RendererEvents.Error, {
-        message: `region tag "${tag}" is not allowed; using <div>`,
-        regionId: id,
-        recoverable: true,
-      });
+    const ownerDocument = this.root.ownerDocument;
+    let reason: string;
+    if (isCustomElementTag(tag)) {
+      const { resolution, diagnostics } = resolveComponent(
+        {
+          type: 'element',
+          tag,
+          attrs,
+          children: [],
+          selfClosing: true,
+          complete: true,
+          source: '',
+          start: 0,
+          end: 0,
+        },
+        this.host.components,
+      );
+      if (resolution.kind === 'render' && resolution.contract.children.kind === 'flow') {
+        const element = ownerDocument.createElement(tag);
+        for (const [name, value] of Object.entries(resolution.attrs)) {
+          element.setAttribute(name, value);
+        }
+        element.setAttribute(REGION_ATTR, id);
+        return element;
+      }
+      const errors = diagnostics
+        .filter((diagnostic) => diagnostic.severity === DiagnosticSeverity.Error)
+        .map((diagnostic) => diagnostic.message);
+      reason =
+        resolution.kind === 'render'
+          ? `<${tag}> does not accept streamed region content`
+          : errors.length > 0
+            ? errors.join('; ')
+            : `<${tag}> is not an available component`;
+    } else if (SAFE_NATIVE_REGION_TAGS.has(tag)) {
+      const element = ownerDocument.createElement(tag);
+      applySafeAttrs(element, attrs);
+      element.setAttribute(REGION_ATTR, id);
+      return element;
+    } else {
+      reason = `region tag "${tag}" is not allowed`;
     }
 
-    const element = this.root.ownerDocument.createElement(safe ? tag : 'div');
-    applySafeAttrs(element, attrs);
+    this.emit<RendererErrorDetail>(RendererEvents.Error, {
+      message: `${reason}; using <div>`,
+      regionId: id,
+      recoverable: true,
+    });
+    const element = ownerDocument.createElement('div');
     element.setAttribute(REGION_ATTR, id);
     return element;
   }
@@ -422,7 +619,7 @@ export class RegionTreeRenderer extends EventTarget {
    * container. Child regions are siblings of the content container, so they
    * survive every re-render.
    */
-  private renderRegionContent(region: RegionState, final: boolean): ReadonlyArray<Diagnostic> {
+  private renderRegionContent(region: RegionState, final: boolean): ReadonlyArray<HtmdDiagnostic> {
     if (region.contentElement === undefined) {
       const content = this.root.ownerDocument.createElement('div');
       content.setAttribute(CONTENT_ATTR, '');
@@ -430,10 +627,16 @@ export class RegionTreeRenderer extends EventTarget {
       region.contentElement = content;
     }
 
-    const result = Parser.getInstance().parse(region.buffer, { streaming: !final });
-    materializeInto(region.contentElement, result.document.nodes, { streaming: !final });
+    const result = Parser.getInstance().parse(region.buffer, {
+      streaming: !final,
+      rawTextTags: this.rawTextTags,
+    });
+    const contractDiagnostics = materializeInto(region.contentElement, result.document.nodes, {
+      streaming: !final,
+      host: this.host,
+    });
     region.element.toggleAttribute(PENDING_ATTR, result.pending);
-    return result.diagnostics;
+    return [...result.diagnostics, ...contractDiagnostics];
   }
 
   private registerRoot(): void {
@@ -442,8 +645,10 @@ export class RegionTreeRenderer extends EventTarget {
       id: ROOT_REGION_ID,
       element: this.root,
       parentId: undefined,
+      depth: 0,
       contentElement: undefined,
       buffer: '',
+      bytes: 0,
       done: false,
     });
   }
@@ -460,6 +665,31 @@ function parentPathOf(id: string): string {
     return ROOT_REGION_ID;
   }
   return id.slice(0, lastDot);
+}
+
+function regionIdOf(event: WireEvent): string | undefined {
+  switch (event.type) {
+    case 'stream':
+      return event.target;
+    case 'region':
+    case 'region-done':
+    case 'region-replace':
+      return event.id;
+    default:
+      return undefined;
+  }
+}
+
+/** UTF-8 length without encoding: surrogate pairs count 4, other units 1-3. */
+function utf8Length(text: string): number {
+  let bytes = text.length;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code >= 0x80) {
+      bytes += code < 0x800 || (code >= 0xd800 && code <= 0xdfff) ? 1 : 2;
+    }
+  }
+  return bytes;
 }
 
 function assertNever(value: never): never {

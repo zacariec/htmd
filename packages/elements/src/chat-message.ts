@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit';
-import type { TemplateResult } from 'lit';
+import type { PropertyValues, TemplateResult } from 'lit';
 
 export type ChatMessageAuthor = 'user' | 'agent' | 'system';
 export type ChatMessageStatus = 'streaming' | 'complete' | 'failed';
@@ -40,6 +40,18 @@ export class ChatMessage extends LitElement {
   public status: ChatMessageStatus = 'complete';
   public createdAt: string = '';
 
+  public override connectedCallback(): void {
+    super.connectedCallback();
+    this.setAttribute('role', 'article');
+  }
+
+  /** The host is the article: labelled by its author, busy while streaming. */
+  protected override updated(changed: PropertyValues<this>): void {
+    super.updated(changed);
+    setOptionalAttribute(this, 'aria-label', this.authorName || this.authorId);
+    setOptionalAttribute(this, 'aria-busy', this.status === 'streaming' ? 'true' : '');
+  }
+
   public override render(): TemplateResult {
     return html`
       <header class="meta">
@@ -52,5 +64,13 @@ export class ChatMessage extends LitElement {
         <slot></slot>
       </div>
     `;
+  }
+}
+
+function setOptionalAttribute(element: Element, name: string, value: string): void {
+  if (value.length > 0) {
+    element.setAttribute(name, value);
+  } else {
+    element.removeAttribute(name);
   }
 }

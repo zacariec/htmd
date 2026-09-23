@@ -7,6 +7,7 @@
  */
 
 export {
+  DEFAULT_RAW_TEXT_TAGS,
   DiagnosticCode,
   DiagnosticSeverity,
   isCustomElementTag,
@@ -23,6 +24,64 @@ export type {
 } from '@htmdjs/parser';
 
 export {
+  authorizeComponentUrl,
+  baseCatalog,
+  baseContracts,
+  chatMessageContract,
+  ChoiceDetail,
+  choiceGroupContract,
+  choiceItemContract,
+  codeBlockContract,
+  ComponentCatalog,
+  ComponentEvents,
+  ContractDiagnosticCode,
+  createHost,
+  dataTableContract,
+  defaultHost,
+  filePreviewContract,
+  FragmentNode,
+  FragmentState,
+  HOST_REQUEST_EVENT,
+  htmdFragmentContract,
+  imageCardContract,
+  MAX_TABLE_ROWS,
+  originRegion,
+  provideHtmdHost,
+  RefineDetail,
+  refinePromptContract,
+  requestHtmdHost,
+  resolveChildren,
+  resolveComponent,
+  revokeHtmdHost,
+  sameOriginMediaPolicy,
+  sanitizeUrl,
+  TableBatch,
+  TablePayload,
+  validateNodes,
+  VERSION_ATTRIBUTE,
+} from '@htmdjs/contracts';
+export type {
+  AttributeContract,
+  AttributeOwnership,
+  ChildrenContract,
+  ComponentContract,
+  ComponentEffect,
+  ComponentResolution,
+  ContractDiagnostic,
+  ContractIssue,
+  DataLoader,
+  DataRequest,
+  EventContract,
+  HtmdDiagnostic,
+  HtmdHost,
+  HtmdHostOptions,
+  PartialPolicy,
+  ResolveOptions,
+  UrlPurpose,
+  UrlRequest,
+} from '@htmdjs/contracts';
+
+export {
   ChatMessage,
   ChoiceGroup,
   ChoiceItem,
@@ -30,7 +89,6 @@ export {
   DataTable,
   defineOnce,
   FilePreview,
-  HtmdElementEvents,
   HtmdElementTag,
   HtmdFragment,
   ImageCard,
@@ -41,10 +99,8 @@ export {
 export type {
   ChatMessageAuthor,
   ChatMessageStatus,
-  ChoiceDetail,
-  ChoiceSelectDetail,
+  DataTableState,
   HtmdElementsLogSink,
-  RefineDetail,
 } from '@htmdjs/elements';
 
 export {
@@ -64,6 +120,7 @@ export {
 
 export {
   applySafeAttrs,
+  DEFAULT_RENDER_LIMITS,
   materializeInto,
   RegionTreeRenderer,
   RendererEvents,
@@ -73,9 +130,13 @@ export {
 export type {
   DocDoneDetail,
   DocOpenDetail,
+  MaterializeOptions,
   RegionCreatedDetail,
   RegionDoneDetail,
   RegionReplacedDetail,
+  RegionTreeRendererOptions,
   RegionUpdatedDetail,
+  RenderLimits,
+  RenderResult,
   RendererErrorDetail,
 } from '@htmdjs/renderer';

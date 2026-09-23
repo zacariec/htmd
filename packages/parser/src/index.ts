@@ -1,4 +1,4 @@
-export { DiagnosticCode, DiagnosticSeverity } from './types.js';
+export { DEFAULT_RAW_TEXT_TAGS, DiagnosticCode, DiagnosticSeverity } from './types.js';
 export type {
   Diagnostic,
   ElementBlock,

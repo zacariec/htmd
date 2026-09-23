@@ -8,6 +8,7 @@
   "references": [
     { "path": "../wire" },
     { "path": "../parser" },
+    { "path": "../contracts" },
     { "path": "../elements" },
     { "path": "../renderer" }
   ],

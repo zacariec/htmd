@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeUrl } from '../src/internal/sanitize-url.js';
+import { sanitizeUrl } from '../src/sanitize-url.js';
 
 describe('sanitizeUrl', () => {
   it('allows http and https URLs', () => {

@@ -1,24 +1,34 @@
-import { isCustomElementTag } from '@htmdjs/parser';
+import {
+  FragmentNode,
+  FragmentState,
+  authorizeComponentUrl,
+  requestHtmdHost,
+  resolveComponent,
+} from '@htmdjs/contracts';
+import type { ComponentContract, HtmdHost, UrlPurpose } from '@htmdjs/contracts';
+import type { ElementBlock } from '@htmdjs/parser';
 import { LitElement, css, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { ref } from 'lit/directives/ref.js';
 import { html, unsafeStatic } from 'lit/static-html.js';
 import type { StaticValue } from 'lit/static-html.js';
-import { z } from 'zod';
 
 import { HtmdElementsLogger } from './internal/logger.js';
-import { sanitizeUrl } from './internal/sanitize-url.js';
 
 /**
  * `<htmd-fragment>` — the escape hatch.
  *
  * Renders a JSON-described tree of safe sub-elements with one-way data
- * binding. The payload is parsed JSON validated by Zod, never evaluated code;
- * bindings are flat `{{key}}` lookups on a scoped state object.
+ * binding. The payload is parsed JSON validated against the contract's
+ * `FragmentNode` schema, never evaluated code; bindings are flat `{{key}}`
+ * lookups on a scoped state object.
  *
  * Tags materialise via `lit/static-html` — `unsafeStatic(tag)` is acceptable
- * because every tag passes the allowlist (or the custom-element name check)
- * first. URL-bearing attributes go through `sanitizeUrl`.
+ * because every tag is either on the native allowlist or a component the
+ * host's catalog resolves. Components receive only contract-validated
+ * attributes and children; being registered as a custom element is not
+ * permission. Native `img` sources and `a` links are authorized with the
+ * host like any component URL.
  *
  * Hard rule: never `eval`, never `Function()`, never inline event handlers.
  */
@@ -49,36 +59,21 @@ const ALLOWED_ATTRS_BY_TAG: Readonly<Record<string, ReadonlySet<string>>> = {
   a: new Set(['class', 'href', 'target', 'rel']),
 };
 
-const URL_ATTR_NAMES: ReadonlySet<string> = new Set([
-  'src',
-  'href',
-  'action',
-  'formaction',
-  'poster',
-]);
+/** URL-valued native attributes and the purpose the host authorizes them for. */
+const URL_PURPOSE_BY_ATTR: Readonly<Record<string, UrlPurpose>> = {
+  src: 'image',
+  href: 'link',
+};
 
 const MAX_RENDER_DEPTH = 32;
 const MAX_LOOP_ITEMS = 1000;
 
-const FragmentNodeSchema = z.object({
-  tag: z.string(),
-  class: z.string().optional(),
-  text: z.string().optional(),
-  for: z.string().optional(),
-  attrs: z.record(z.string(), z.string()).optional(),
-  get children() {
-    return z.array(FragmentNodeSchema).optional();
-  },
-});
-
-type FragmentNode = z.output<typeof FragmentNodeSchema>;
-
-const FragmentStateSchema = z.record(z.string(), z.unknown());
-
-type FragmentState = z.output<typeof FragmentStateSchema>;
-
-/** Lit renderables the fragment can produce — templates, nothing, or lists. */
-type FragmentRenderResult = TemplateResult | typeof nothing | ReadonlyArray<FragmentRenderResult>;
+/** Lit renderables the fragment can produce — templates, text, nothing, or lists. */
+type FragmentRenderResult =
+  | TemplateResult
+  | string
+  | typeof nothing
+  | ReadonlyArray<FragmentRenderResult>;
 
 const staticTagCache = new Map<string, StaticValue>();
 
@@ -104,7 +99,7 @@ function parseStateAttribute(value: string | null): FragmentState {
     return {};
   }
   try {
-    const parsed = FragmentStateSchema.safeParse(JSON.parse(value) as unknown);
+    const parsed = FragmentState.safeParse(JSON.parse(value) as unknown);
     if (!parsed.success) {
       HtmdElementsLogger.getInstance().warn('fragment state attribute is not an object; ignoring');
       return {};
@@ -114,6 +109,25 @@ function parseStateAttribute(value: string | null): FragmentState {
     HtmdElementsLogger.getInstance().warn('fragment state attribute is not valid JSON', error);
     return {};
   }
+}
+
+/** A complete source element equivalent to a fragment node, for contract resolution. */
+function elementBlockFor(tag: string, node: FragmentNode, text: string): ElementBlock {
+  const attrs: Record<string, string> = {};
+  for (const [name, value] of Object.entries(node.attrs ?? {})) {
+    attrs[name.toLowerCase()] = value;
+  }
+  return {
+    type: 'element',
+    tag,
+    attrs,
+    children: text.length > 0 ? [{ type: 'markdown', source: text, start: 0, end: 0 }] : [],
+    selfClosing: false,
+    complete: true,
+    source: '',
+    start: 0,
+    end: 0,
+  };
 }
 
 export class HtmdFragment extends LitElement {
@@ -135,6 +149,8 @@ export class HtmdFragment extends LitElement {
   protected payload: FragmentNode | undefined = undefined;
 
   private payloadObserver: MutationObserver | undefined = undefined;
+  /** Component elements whose initial-owned attributes were already applied. */
+  private readonly initializedComponents = new WeakSet<Element>();
 
   public override connectedCallback(): void {
     super.connectedCallback();
@@ -171,7 +187,7 @@ export class HtmdFragment extends LitElement {
       return;
     }
 
-    const parsed = FragmentNodeSchema.safeParse(json);
+    const parsed = FragmentNode.safeParse(json);
     if (!parsed.success) {
       HtmdElementsLogger.getInstance().warn('fragment payload is not a valid fragment node');
       this.payload = undefined;
@@ -185,13 +201,14 @@ export class HtmdFragment extends LitElement {
     if (this.payload === undefined) {
       return nothing;
     }
-    return this.renderNode(this.payload, this.state, 0);
+    return this.renderNode(this.payload, this.state, 0, requestHtmdHost(this));
   }
 
   private renderNode(
     node: FragmentNode,
     state: FragmentState,
     depth: number,
+    host: HtmdHost,
   ): FragmentRenderResult {
     if (depth > MAX_RENDER_DEPTH) {
       HtmdElementsLogger.getInstance().warn('fragment payload exceeds maximum depth; truncating');
@@ -199,33 +216,27 @@ export class HtmdFragment extends LitElement {
     }
 
     if (node.for !== undefined) {
-      return this.renderLoop(node, state, depth);
+      return this.renderLoop(node, state, depth, host);
     }
 
     const tag = node.tag.toLowerCase();
     const text = node.text === undefined ? '' : interpolate(node.text, state);
-    const children = (node.children ?? []).map((child) => this.renderNode(child, state, depth + 1));
 
     if (ALLOWED_TAGS.has(tag)) {
-      return this.renderNativeTag(tag, node, text, children);
+      const children = (node.children ?? []).map((child) =>
+        this.renderNode(child, state, depth + 1, host),
+      );
+      return this.renderNativeTag(tag, node, text, children, host);
     }
 
-    if (isCustomElementTag(tag) && typeof customElements !== 'undefined') {
-      if (customElements.get(tag) === undefined) {
-        HtmdElementsLogger.getInstance().warn(`fragment tag "${tag}" is not registered; skipping`);
-        return nothing;
-      }
-      return this.renderCustomTag(tag, node, text, children);
-    }
-
-    HtmdElementsLogger.getInstance().warn(`fragment tag "${tag}" not allowed; skipping`);
-    return nothing;
+    return this.renderComponent(tag, node, text, state, depth, host);
   }
 
   private renderLoop(
     node: FragmentNode,
     state: FragmentState,
     depth: number,
+    host: HtmdHost,
   ): FragmentRenderResult {
     if (node.for === undefined) {
       return nothing;
@@ -257,7 +268,7 @@ export class HtmdFragment extends LitElement {
     const { for: _for, ...itemNode } = node;
 
     return bounded.map((item) =>
-      this.renderNode(itemNode, { ...state, [itemName]: item }, depth + 1),
+      this.renderNode(itemNode, { ...state, [itemName]: item }, depth + 1, host),
     );
   }
 
@@ -266,8 +277,9 @@ export class HtmdFragment extends LitElement {
     node: FragmentNode,
     text: string,
     children: ReadonlyArray<FragmentRenderResult>,
+    host: HtmdHost,
   ): TemplateResult {
-    const attrs = this.safeNativeAttrs(tag, node);
+    const attrs = this.safeNativeAttrs(tag, node, host);
     const staticTag = staticTagFor(tag);
 
     if (tag === 'img') {
@@ -287,31 +299,108 @@ export class HtmdFragment extends LitElement {
       rel=${attrs['rel'] ?? nothing}>${text.length > 0 ? text : nothing}${children}</${staticTag}>`;
   }
 
-  private renderCustomTag(
+  /**
+   * Renders a component only when the host catalog resolves it, with its
+   * validated attributes and the children its contract accepts.
+   */
+  private renderComponent(
     tag: string,
     node: FragmentNode,
     text: string,
-    children: ReadonlyArray<FragmentRenderResult>,
-  ): TemplateResult {
-    const attrs = this.safeCustomAttrs(node);
-    const staticTag = staticTagFor(tag);
+    state: FragmentState,
+    depth: number,
+    host: HtmdHost,
+  ): FragmentRenderResult {
+    const { resolution, diagnostics } = resolveComponent(
+      elementBlockFor(tag, node, text),
+      host.components,
+    );
+    for (const diagnostic of diagnostics) {
+      HtmdElementsLogger.getInstance().warn(`fragment: ${diagnostic.message}`);
+    }
+    if (resolution.kind !== 'render') {
+      return nothing;
+    }
 
-    return html`<${staticTag} ${ref((element) => {
-      if (element === undefined) {
-        return;
+    const { contract, attrs } = resolution;
+    const staticTag = staticTagFor(tag);
+    const applyAttributes = (element: Element | undefined): void => {
+      if (element !== undefined) {
+        this.applyComponentAttributes(element, contract, attrs);
       }
-      for (const [name, value] of Object.entries(attrs)) {
-        element.setAttribute(name, value);
+    };
+    const content = this.renderComponentChildren(contract, node, text, state, depth, host);
+
+    return html`<${staticTag} ${ref(applyAttributes)}>${content}</${staticTag}>`;
+  }
+
+  private renderComponentChildren(
+    contract: ComponentContract,
+    node: FragmentNode,
+    text: string,
+    state: FragmentState,
+    depth: number,
+    host: HtmdHost,
+  ): FragmentRenderResult {
+    const accepts = contract.children;
+    if (accepts.kind === 'none') {
+      return nothing;
+    }
+    if (accepts.kind === 'text') {
+      return text;
+    }
+    const children: FragmentRenderResult[] = [];
+    for (const child of node.children ?? []) {
+      const childTag = child.tag.toLowerCase();
+      const allowed =
+        accepts.kind === 'flow' ||
+        (accepts.kind === 'markdown' && ALLOWED_TAGS.has(childTag)) ||
+        (accepts.kind === 'components' && accepts.allowed.includes(childTag));
+      if (!allowed) {
+        HtmdElementsLogger.getInstance().warn(
+          `fragment <${contract.tag}> does not accept <${childTag}>; skipping`,
+        );
+        continue;
       }
-    })}>${text.length > 0 ? text : nothing}${children}</${staticTag}>`;
+      children.push(this.renderNode(child, state, depth + 1, host));
+    }
+    return accepts.kind === 'components' ? children : [text, children];
   }
 
   /**
-   * Filters attrs down to the per-tag allowlist, sanitizes URL attributes,
-   * folds `node.class` in, and forces `rel="noopener noreferrer"` on links
-   * that open a new browsing context.
+   * Source-owned attributes follow the payload on every render; initial-owned
+   * attributes are applied only when the element is created.
    */
-  private safeNativeAttrs(tag: string, node: FragmentNode): Readonly<Record<string, string>> {
+  private applyComponentAttributes(
+    element: Element,
+    contract: ComponentContract,
+    attrs: Readonly<Record<string, string>>,
+  ): void {
+    const created = !this.initializedComponents.has(element);
+    this.initializedComponents.add(element);
+    for (const [name, attribute] of Object.entries(contract.attributes)) {
+      if (!created && attribute.ownership === 'initial') {
+        continue;
+      }
+      const value = attrs[name];
+      if (value === undefined) {
+        element.removeAttribute(name);
+      } else {
+        element.setAttribute(name, value);
+      }
+    }
+  }
+
+  /**
+   * Filters attrs down to the per-tag allowlist, authorizes URL attributes
+   * with the host, folds `node.class` in, and forces `rel="noopener noreferrer"`
+   * on links that open a new browsing context.
+   */
+  private safeNativeAttrs(
+    tag: string,
+    node: FragmentNode,
+    host: HtmdHost,
+  ): Readonly<Record<string, string>> {
     const allowed = ALLOWED_ATTRS_BY_TAG[tag];
     const result: Record<string, string> = {};
 
@@ -321,11 +410,19 @@ export class HtmdFragment extends LitElement {
         if (!allowed.has(attrName)) {
           continue;
         }
-        const safeValue = this.safeAttrValue(attrName, value);
-        if (safeValue === undefined) {
+        const purpose = URL_PURPOSE_BY_ATTR[attrName];
+        if (purpose === undefined) {
+          result[attrName] = value;
           continue;
         }
-        result[attrName] = safeValue;
+        const url = authorizeComponentUrl(this, value, purpose, host);
+        if (url === undefined) {
+          HtmdElementsLogger.getInstance().warn(
+            `fragment <${tag}> ${attrName} is not authorized by the host; skipping`,
+          );
+          continue;
+        }
+        result[attrName] = url.href;
       }
     }
 
@@ -338,43 +435,5 @@ export class HtmdFragment extends LitElement {
     }
 
     return result;
-  }
-
-  private safeCustomAttrs(node: FragmentNode): Readonly<Record<string, string>> {
-    const result: Record<string, string> = {};
-
-    for (const [name, value] of Object.entries(node.attrs ?? {})) {
-      const attrName = name.toLowerCase();
-      if (attrName.startsWith('on') || attrName === 'style') {
-        HtmdElementsLogger.getInstance().warn(
-          `fragment attribute "${attrName}" not allowed; skipping`,
-        );
-        continue;
-      }
-      const safeValue = this.safeAttrValue(attrName, value);
-      if (safeValue === undefined) {
-        continue;
-      }
-      result[attrName] = safeValue;
-    }
-
-    if (node.class !== undefined) {
-      result['class'] = node.class;
-    }
-
-    return result;
-  }
-
-  private safeAttrValue(attrName: string, value: string): string | undefined {
-    if (!URL_ATTR_NAMES.has(attrName)) {
-      return value;
-    }
-    const sanitized = sanitizeUrl(value);
-    if (sanitized === undefined) {
-      HtmdElementsLogger.getInstance().warn(
-        `fragment attribute "${attrName}" carries a disallowed URL; skipping`,
-      );
-    }
-    return sanitized;
   }
 }

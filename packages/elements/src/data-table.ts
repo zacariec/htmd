@@ -1,36 +1,49 @@
-import { LitElement, css, html } from 'lit';
-import type { PropertyValues, TemplateResult } from 'lit';
-import { z } from 'zod';
+import {
+  MAX_TABLE_ROWS,
+  TableBatch,
+  TablePayload,
+  authorizeComponentUrl,
+  requestHtmdHost,
+} from '@htmdjs/contracts';
+import type { HtmdHost } from '@htmdjs/contracts';
+import { LitElement, css, html, nothing } from 'lit';
+import type { TemplateResult } from 'lit';
+import { createRef, ref } from 'lit/directives/ref.js';
 
 import { HtmdElementsLogger } from './internal/logger.js';
 
 /**
- * `<data-table>` — tabular data fetched from `src`.
+ * `<data-table>` — tabular data loaded through the host.
  *
- * Fetch policy: same-origin only by default. The document author (usually a
- * model) controls `src`, so cross-origin fetches are opt-in by the consumer
- * via the static `DataTable.urlPolicy` hook — never by the document.
+ * `src` is producer-controlled, so it is never permission to load: the host
+ * must authorize it for "data" (the default host never does). The host's
+ * `loadData` loads it when present; otherwise it is fetched as JSON.
  *
- * The fetched payload is untrusted and validated with Zod before render.
+ * A loader may return a complete `TablePayload` or an async iterable of
+ * `TableBatch`es whose rows render as they arrive. Every payload is validated
+ * before any of it renders, and at most `MAX_TABLE_ROWS` rows render.
+ *
+ * Each load belongs to the current `src`: changing `src` or disconnecting
+ * aborts it and late results are discarded; reconnecting restarts an aborted
+ * load.
  */
 
-const TableDataSchema = z.object({
-  columns: z.array(z.string()),
-  rows: z.array(z.record(z.string(), z.unknown())),
-});
+export type DataTableState =
+  | 'blocked'
+  | 'loading'
+  | 'partial'
+  | 'loaded'
+  | 'empty'
+  | 'interrupted'
+  | 'failed';
 
-type TableData = z.output<typeof TableDataSchema>;
+type TableRow = TablePayload['rows'][number];
 
-type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
+const BLOCKED_TEXT = 'This data source is not allowed here.';
+const INTERRUPTED_TEXT = 'Loading stopped early; showing the rows received.';
+const TRUNCATED_TEXT = `Showing the first ${MAX_TABLE_ROWS} rows.`;
 
 export class DataTable extends LitElement {
-  /**
-   * Consumer-controlled fetch policy. Receives the resolved URL; returns
-   * whether the fetch may proceed. Defaults to same-origin only.
-   */
-  public static urlPolicy: (url: URL) => boolean = (url) =>
-    typeof location !== 'undefined' && url.origin === location.origin;
-
   public static override styles = css`
     :host {
       display: block;
@@ -53,15 +66,17 @@ export class DataTable extends LitElement {
       font-weight: 600;
       background: var(--htmd-th-bg, rgba(255, 255, 255, 0.03));
     }
-    .empty {
-      padding: 24px;
+    .status {
+      margin: 0;
+      padding: 12px 24px;
       text-align: center;
-      opacity: 0.6;
+      opacity: 0.7;
     }
-    .error {
-      padding: 24px;
-      text-align: center;
+    .status.blocked,
+    .status.failed,
+    .status.interrupted {
       color: var(--htmd-error, #dc2626);
+      opacity: 1;
     }
   `;
 
@@ -70,8 +85,7 @@ export class DataTable extends LitElement {
     loadingText: { type: String, attribute: 'loading-text' },
     emptyText: { type: String, attribute: 'empty-text' },
     errorText: { type: String, attribute: 'error-text' },
-    data: { state: true },
-    loadState: { state: true },
+    state: { state: true },
   };
 
   public src: string = '';
@@ -79,92 +93,230 @@ export class DataTable extends LitElement {
   public emptyText: string = 'No data.';
   public errorText: string = 'Failed to load data.';
 
-  protected data: TableData | undefined = undefined;
-  protected loadState: LoadState = 'idle';
-
+  private state: DataTableState = 'loading';
+  private columns: readonly string[] = [];
+  /** Rows of the current load; replaced (not cleared) when a new load starts. */
+  private rows: TableRow[] = [];
+  private truncated: boolean = false;
+  /** `src` the current rows and state belong to; undefined when none loaded. */
   private loadedSrc: string | undefined = undefined;
+  /** Present while a load is in flight. */
+  private controller: AbortController | undefined = undefined;
 
-  protected override updated(changed: PropertyValues): void {
-    super.updated(changed);
-    if (this.src.length > 0 && this.src !== this.loadedSrc) {
-      void this.load();
+  /**
+   * Row cells are appended to the tbody directly, so each batch costs only
+   * its own rows instead of re-rendering every row received so far.
+   */
+  private readonly body = createRef<HTMLTableSectionElement>();
+  private renderedBody: HTMLTableSectionElement | undefined = undefined;
+  private renderedRows: readonly TableRow[] | undefined = undefined;
+  private renderedCount: number = 0;
+
+  /** Where the table is in loading its current `src`. */
+  public get loadState(): DataTableState {
+    return this.state;
+  }
+
+  public override connectedCallback(): void {
+    super.connectedCallback();
+    if (this.hasUpdated) {
+      this.syncLoad();
     }
   }
 
-  private async load(): Promise<void> {
-    const requestedSrc = this.src;
-    this.loadedSrc = requestedSrc;
+  public override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this.controller !== undefined) {
+      this.controller.abort();
+      this.controller = undefined;
+      this.loadedSrc = undefined;
+    }
+  }
 
-    const resolved = this.resolveUrl(requestedSrc);
-    if (resolved === undefined || !DataTable.urlPolicy(resolved)) {
-      HtmdElementsLogger.getInstance().warn(
-        `data-table src blocked by fetch policy: "${requestedSrc}"`,
-      );
-      this.loadState = 'error';
+  protected override willUpdate(): void {
+    this.syncLoad();
+  }
+
+  /** Starts a load when connected and `src` differs from the loaded source. */
+  private syncLoad(): void {
+    if (!this.isConnected || this.src === this.loadedSrc) {
       return;
     }
+    this.controller?.abort();
+    this.controller = undefined;
+    this.loadedSrc = this.src;
+    this.columns = [];
+    this.rows = [];
+    this.truncated = false;
 
-    this.loadState = 'loading';
+    const host = requestHtmdHost(this);
+    const url = authorizeComponentUrl(this, this.src, 'data', host);
+    if (url === undefined) {
+      HtmdElementsLogger.getInstance().warn(
+        `data-table src "${this.src}" is not authorized by the host; not loading`,
+      );
+      this.state = 'blocked';
+      return;
+    }
+    const controller = new AbortController();
+    this.controller = controller;
+    this.state = 'loading';
+    void this.load(url, host, controller);
+  }
+
+  private async load(url: URL, host: HtmdHost, controller: AbortController): Promise<void> {
+    const { signal } = controller;
     try {
-      const response = await fetch(resolved.toString());
-      if (!response.ok) {
-        throw new Error(`fetch failed with status ${response.status}`);
+      const source =
+        host.loadData === undefined
+          ? fetchJson(url, signal)
+          : host.loadData({ url, component: this.localName, element: this, signal });
+      if (isAsyncIterable(source)) {
+        let first = true;
+        for await (const batch of source) {
+          if (signal.aborted) {
+            return;
+          }
+          this.appendBatch(batch, first);
+          first = false;
+          this.state = 'partial';
+          if (this.truncated) {
+            break;
+          }
+        }
+      } else {
+        const payload = TablePayload.safeParse(await source);
+        if (signal.aborted) {
+          return;
+        }
+        if (!payload.success) {
+          throw new Error('data-table payload is not { columns, rows }');
+        }
+        this.columns = payload.data.columns;
+        this.appendRows(payload.data.rows);
       }
-      const payload = TableDataSchema.safeParse((await response.json()) as unknown);
-      if (!payload.success) {
-        throw new Error('payload does not match { columns, rows }');
-      }
-      if (this.src !== requestedSrc) {
+      if (signal.aborted) {
         return;
       }
-      this.data = payload.data;
-      this.loadState = 'loaded';
+      this.state = this.rows.length === 0 ? 'empty' : 'loaded';
     } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
       HtmdElementsLogger.getInstance().error('data-table load failed', error);
-      if (this.src === requestedSrc) {
-        this.data = undefined;
-        this.loadState = 'error';
+      this.state = this.rows.length === 0 ? 'failed' : 'interrupted';
+    } finally {
+      if (this.controller === controller) {
+        this.controller = undefined;
       }
     }
   }
 
-  private resolveUrl(src: string): URL | undefined {
-    try {
-      const base = typeof document === 'undefined' ? undefined : document.baseURI;
-      return new URL(src, base);
-    } catch {
-      return undefined;
+  /** Validates one progressive batch; the first must carry `columns`. */
+  private appendBatch(value: unknown, first: boolean): void {
+    const batch = TableBatch.safeParse(value);
+    if (!batch.success) {
+      throw new Error('data-table batch is not { columns?, rows }');
+    }
+    if (first) {
+      if (batch.data.columns === undefined) {
+        throw new Error('data-table first batch must carry columns');
+      }
+      this.columns = batch.data.columns;
+    }
+    this.appendRows(batch.data.rows);
+  }
+
+  private appendRows(rows: readonly TableRow[]): void {
+    const room = MAX_TABLE_ROWS - this.rows.length;
+    if (rows.length > room) {
+      this.truncated = true;
+    }
+    this.rows.push(...rows.slice(0, room));
+    this.requestUpdate();
+  }
+
+  private statusText(): string {
+    switch (this.state) {
+      case 'blocked':
+        return BLOCKED_TEXT;
+      case 'loading':
+      case 'partial':
+        return this.loadingText;
+      case 'empty':
+        return this.emptyText;
+      case 'interrupted':
+        return INTERRUPTED_TEXT;
+      case 'failed':
+        return this.errorText;
+      case 'loaded':
+        return this.truncated ? TRUNCATED_TEXT : '';
     }
   }
 
   public override render(): TemplateResult {
-    if (this.loadState === 'loading') {
-      return html`<div class="empty">${this.loadingText}</div>`;
-    }
-    if (this.loadState === 'error') {
-      return html`<div class="error">${this.errorText}</div>`;
-    }
-    if (this.data === undefined || this.data.columns.length === 0) {
-      return html`<div class="empty">${this.emptyText}</div>`;
-    }
-    const { columns, rows } = this.data;
+    const busy = this.state === 'loading' || this.state === 'partial';
+    return html`
+      <div class="rows" aria-busy=${busy ? 'true' : 'false'}>
+        ${this.rows.length > 0 || this.state === 'partial' ? this.renderTable() : nothing}
+      </div>
+      <p class="status ${this.state}" role="status" aria-live="polite">${this.statusText()}</p>
+    `;
+  }
+
+  private renderTable(): TemplateResult {
     return html`
       <table>
         <thead>
           <tr>
-            ${columns.map((column) => html`<th>${column}</th>`)}
+            ${this.columns.map((column) => html`<th scope="col">${column}</th>`)}
           </tr>
         </thead>
-        <tbody>
-          ${rows.map(
-            (row) => html`
-              <tr>
-                ${columns.map((column) => html`<td>${String(row[column] ?? '')}</td>`)}
-              </tr>
-            `,
-          )}
-        </tbody>
+        <tbody ${ref(this.body)}></tbody>
       </table>
     `;
   }
+
+  /** Appends rows not yet in the tbody; a new tbody or a new load starts over. */
+  protected override updated(): void {
+    const body = this.body.value;
+    if (body === undefined) {
+      return;
+    }
+    if (body !== this.renderedBody || this.rows !== this.renderedRows) {
+      body.replaceChildren();
+      this.renderedBody = body;
+      this.renderedRows = this.rows;
+      this.renderedCount = 0;
+    }
+    const document = this.ownerDocument;
+    const fragment = document.createDocumentFragment();
+    for (const row of this.rows.slice(this.renderedCount)) {
+      const tr = document.createElement('tr');
+      for (const column of this.columns) {
+        const td = document.createElement('td');
+        td.textContent = String(row[column] ?? '');
+        tr.append(td);
+      }
+      fragment.append(tr);
+    }
+    body.append(fragment);
+    this.renderedCount = this.rows.length;
+  }
+}
+
+async function fetchJson(url: URL, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url.href, {
+    signal,
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+  });
+  if (!response.ok) {
+    throw new Error(`data request failed with status ${response.status}`);
+  }
+  return (await response.json()) as unknown;
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return typeof value === 'object' && value !== null && Symbol.asyncIterator in value;
 }

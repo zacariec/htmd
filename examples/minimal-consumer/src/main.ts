@@ -1,7 +1,12 @@
-import { HtmdElementEvents, registerHtmdElements } from '@htmdjs/elements';
+import { ComponentEvents, baseCatalog, createHost } from '@htmdjs/contracts';
+import type { ChoiceDetail } from '@htmdjs/contracts';
+import { registerHtmdElements } from '@htmdjs/elements';
 import { renderHtmdSource } from '@htmdjs/renderer';
 
 registerHtmdElements();
+
+// This page loads no data, so tables are not offered to documents at all.
+const host = createHost({ components: baseCatalog.without('data-table') });
 
 const SAMPLE = `Looking at the data now.
 
@@ -21,12 +26,12 @@ if (stage === null) {
   throw new Error('missing #stage');
 }
 
-const result = renderHtmdSource(stage, SAMPLE);
+const result = renderHtmdSource(stage, SAMPLE, { host });
 if (result.diagnostics.length > 0) {
   console.info('htmd diagnostics:', result.diagnostics);
 }
 
-stage.addEventListener(HtmdElementEvents.Choice, (event) => {
-  const detail = (event as CustomEvent<{ name: string; value: string }>).detail;
+stage.addEventListener(ComponentEvents.Choice, (event) => {
+  const detail = (event as CustomEvent<ChoiceDetail>).detail;
   console.info('choice selected:', detail);
 });

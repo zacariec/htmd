@@ -1,10 +1,26 @@
+import { baseCatalog, createHost, requestHtmdHost } from '@htmdjs/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegionTreeRenderer } from '../src/region-tree-renderer.js';
+import type { RenderLimits } from '../src/region-tree-renderer.js';
 import { RendererEvents } from '../src/renderer-events.js';
 import type { RegionUpdatedDetail, RendererErrorDetail } from '../src/renderer-events.js';
 
 let root: HTMLDivElement;
 let renderer: RegionTreeRenderer;
+
+function container(): HTMLDivElement {
+  const element = document.createElement('div');
+  document.body.appendChild(element);
+  return element;
+}
+
+function collectErrors(target: RegionTreeRenderer): RendererErrorDetail[] {
+  const errors: RendererErrorDetail[] = [];
+  target.addEventListener(RendererEvents.Error, ((event: CustomEvent<RendererErrorDetail>) => {
+    errors.push(event.detail);
+  }) as EventListener);
+  return errors;
+}
 
 beforeEach(() => {
   document.body.innerHTML = '';
@@ -25,24 +41,32 @@ describe('event handling — one type at a time', () => {
   });
 
   it('region creates an element attached to the root', () => {
-    renderer.apply({ type: 'region', seq: 0, id: '$.msg', tag: 'chat-message' });
-
-    const element = root.querySelector('[data-htmd-region="$.msg"]');
-    expect(element?.tagName.toLowerCase()).toBe('chat-message');
-  });
-
-  it('region applies attrs and refuses on* attrs', () => {
     renderer.apply({
       type: 'region',
       seq: 0,
       id: '$.msg',
       tag: 'chat-message',
-      attrs: { author: 'agent', onclick: 'alert(1)' },
+      attrs: { author: 'agent' },
     });
 
     const element = root.querySelector('[data-htmd-region="$.msg"]');
+    expect(element?.tagName.toLowerCase()).toBe('chat-message');
+  });
+
+  it('region applies validated component attrs only', () => {
+    renderer.apply({
+      type: 'region',
+      seq: 0,
+      id: '$.msg',
+      tag: 'chat-message',
+      attrs: { author: 'agent', onclick: 'alert(1)', style: 'position:fixed' },
+    });
+
+    const element = root.querySelector('[data-htmd-region="$.msg"]');
+    expect(element?.tagName.toLowerCase()).toBe('chat-message');
     expect(element?.getAttribute('author')).toBe('agent');
     expect(element?.getAttribute('onclick')).toBeNull();
+    expect(element?.getAttribute('style')).toBeNull();
   });
 
   it('region with a forbidden tag falls back to div with a recoverable error', () => {
@@ -147,7 +171,13 @@ describe('region id resolution', () => {
   });
 
   it('duplicate region declarations are idempotent', () => {
-    renderer.apply({ type: 'region', seq: 0, id: '$.msg', tag: 'chat-message' });
+    renderer.apply({
+      type: 'region',
+      seq: 0,
+      id: '$.msg',
+      tag: 'chat-message',
+      attrs: { author: 'agent' },
+    });
     renderer.apply({ type: 'region', seq: 1, id: '$.msg', tag: 'div' });
 
     const matches = root.querySelectorAll('[data-htmd-region="$.msg"]');
@@ -426,5 +456,134 @@ describe('document and region lifecycle', () => {
     expect(completedText).toContain('<image-card src="');
     expect(completedPending).toBe(false);
     expect(completedRegionsDone).toBe(true);
+  });
+});
+
+describe('host and component catalog', () => {
+  it('uses <div> with a recoverable error for region components that cannot hold region content', () => {
+    customElements.define('region-probe', class extends HTMLElement {});
+    const errors = collectErrors(renderer);
+    renderer.applyAll([
+      { type: 'region', seq: 0, id: '$.unknown', tag: 'region-probe' },
+      { type: 'region', seq: 1, id: '$.invalid', tag: 'chat-message', attrs: { author: 'robot' } },
+      {
+        type: 'region',
+        seq: 2,
+        id: '$.leaf',
+        tag: 'image-card',
+        attrs: { src: '/x.png', alt: 'x' },
+      },
+    ]);
+
+    for (const id of ['$.unknown', '$.invalid', '$.leaf']) {
+      expect(renderer.regionElement(id)?.tagName.toLowerCase(), id).toBe('div');
+      expect(renderer.regionElement(id)?.attributes, id).toHaveLength(1);
+    }
+    expect(errors.map((error) => [error.regionId, error.recoverable])).toEqual([
+      ['$.unknown', true],
+      ['$.invalid', true],
+      ['$.leaf', true],
+    ]);
+  });
+
+  it('provides its host and resolves region content through the host catalog', () => {
+    const host = createHost({ components: baseCatalog.without('data-table') });
+    const hosted = new RegionTreeRenderer(container(), { host });
+    const updates: RegionUpdatedDetail[] = [];
+    hosted.addEventListener(RendererEvents.RegionUpdated, ((
+      event: CustomEvent<RegionUpdatedDetail>,
+    ) => {
+      updates.push(event.detail);
+    }) as EventListener);
+
+    hosted.apply({
+      type: 'stream',
+      seq: 0,
+      target: '$.body',
+      chunk: '<data-table src="/x"/>\n\n<code-block>**raw**</code-block>',
+    });
+
+    const body = hosted.regionElement('$.body');
+    if (body === undefined) throw new Error('Missing body region');
+    expect(body.querySelector('data-table')).toBeNull();
+    expect(body.querySelector('[data-htmd-fallback="data-table"]')).not.toBeNull();
+    expect(body.querySelector('code-block')?.textContent).toBe('**raw**');
+    expect(updates.at(-1)?.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'unknown-component',
+    ]);
+    expect(requestHtmdHost(body)).toBe(host);
+  });
+});
+
+describe('render limits', () => {
+  function limited(limits: Partial<RenderLimits>): {
+    readonly target: RegionTreeRenderer;
+    readonly errors: RendererErrorDetail[];
+  } {
+    const target = new RegionTreeRenderer(container(), { limits });
+    return { target, errors: collectErrors(target) };
+  }
+
+  function expectClosedAfter(
+    target: RegionTreeRenderer,
+    errors: readonly RendererErrorDetail[],
+    regionId: string,
+    lastSeq: number,
+  ): void {
+    expect(errors.at(-1)).toMatchObject({ regionId, recoverable: false });
+    expect(target.lastAppliedSeq).toBe(lastSeq);
+    expect(target.apply({ type: 'stream', seq: lastSeq + 1, target: '$', chunk: 'late' })).toBe(
+      false,
+    );
+    expect(target.regionElement('$')?.textContent).not.toContain('late');
+  }
+
+  it('counts implicit regions against maxRegions', () => {
+    const { target, errors } = limited({ maxRegions: 2 });
+    expect(target.apply({ type: 'stream', seq: 0, target: '$.a.b', chunk: 'ok' })).toBe(true);
+    expect(target.apply({ type: 'stream', seq: 1, target: '$.c.d', chunk: 'no' })).toBe(false);
+
+    expect(target.regionIds()).toEqual(['$', '$.a', '$.a.b']);
+    expectClosedAfter(target, errors, '$.c.d', 0);
+  });
+
+  it('measures maxRegionDepth along explicit parents', () => {
+    const { target, errors } = limited({ maxRegionDepth: 2 });
+    target.apply({ type: 'region', seq: 0, id: '$.a', tag: 'div' });
+    target.apply({ type: 'region', seq: 1, id: '$.b', tag: 'div', parent: '$.a' });
+    expect(target.apply({ type: 'region', seq: 2, id: '$.c', tag: 'div', parent: '$.b' })).toBe(
+      false,
+    );
+
+    expect(target.regionElement('$.c')).toBeUndefined();
+    expectClosedAfter(target, errors, '$.c', 1);
+  });
+
+  it('bounds one region buffer in UTF-8 bytes after appends and replacements', () => {
+    const { target, errors } = limited({ maxRegionBytes: 8 });
+    target.apply({ type: 'stream', seq: 0, target: '$.a', chunk: 'abcd' });
+    expect(target.apply({ type: 'stream', seq: 1, target: '$.a', chunk: 'éfgh' })).toBe(false);
+    expect(target.regionElement('$.a')?.textContent).toBe('abcd');
+    expectClosedAfter(target, errors, '$.a', 0);
+
+    const replaced = limited({ maxRegionBytes: 8 });
+    replaced.target.apply({ type: 'stream', seq: 0, target: '$.a', chunk: 'abcd' });
+    expect(
+      replaced.target.apply({ type: 'region-replace', seq: 1, id: '$.a', body: '123456789' }),
+    ).toBe(false);
+    expect(replaced.errors.at(-1)).toMatchObject({ regionId: '$.a', recoverable: false });
+  });
+
+  it('bounds the live buffered bytes of the whole document', () => {
+    const { target, errors } = limited({ maxDocumentBytes: 10 });
+    target.apply({ type: 'stream', seq: 0, target: '$.a', chunk: '123456' });
+    target.apply({ type: 'stream', seq: 1, target: '$.a.child', chunk: '1234' });
+    // Replacing `$.a` releases its own buffer and its descendants'.
+    target.apply({ type: 'region-replace', seq: 2, id: '$.a', body: '1' });
+    expect(target.apply({ type: 'stream', seq: 3, target: '$.b', chunk: '123456789' })).toBe(true);
+    expect(target.apply({ type: 'stream', seq: 4, target: '$.b', chunk: '!' })).toBe(false);
+
+    expect(target.regionElement('$.b')?.textContent).toBe('123456789');
+    expectClosedAfter(target, errors, '$.b', 3);
   });
 });

@@ -25,6 +25,8 @@ export interface ElementBlock {
   readonly attrs: Readonly<Record<string, string>>;
   readonly children: ReadonlyArray<HtmdNode>;
   readonly selfClosing: boolean;
+  /** True for self-closing tags and elements whose closing tag was found. */
+  readonly complete: boolean;
   readonly source: string;
   readonly start: number;
   readonly end: number;
@@ -43,6 +45,7 @@ export enum DiagnosticCode {
   ForbiddenAttribute = 'forbidden-attribute',
   ForbiddenUrlScheme = 'forbidden-url-scheme',
   SingleQuotedAttribute = 'single-quoted-attribute',
+  NestingTooDeep = 'nesting-too-deep',
 }
 
 export enum DiagnosticSeverity {
@@ -64,9 +67,24 @@ export interface Diagnostic {
   readonly end: number;
 }
 
+/** Elements whose children are a raw text payload unless `rawTextTags` says otherwise. */
+export const DEFAULT_RAW_TEXT_TAGS: ReadonlySet<string> = new Set(['htmd-fragment', 'code-block']);
+
 export interface ParseOptions {
   /** Buffer incomplete custom tags and allow open elements until finalization. */
   readonly streaming?: boolean;
+  /**
+   * Tags whose children are raw text: everything up to the matching closing
+   * tag is one text child, never scanned for elements, code, or Markdown.
+   * Defaults to `DEFAULT_RAW_TEXT_TAGS`.
+   */
+  readonly rawTextTags?: ReadonlySet<string>;
+  /**
+   * Deepest custom-element nesting parsed as elements (top level is depth 1).
+   * Deeper tags stay literal Markdown with a `NestingTooDeep` error. Defaults
+   * to 64.
+   */
+  readonly maxDepth?: number;
 }
 
 export interface ParseResult {

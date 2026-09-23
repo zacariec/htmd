@@ -1,4 +1,4 @@
-import type { Diagnostic } from '@htmdjs/parser';
+import type { HtmdDiagnostic } from '@htmdjs/contracts';
 
 /**
  * Lifecycle events dispatched by `RegionTreeRenderer` (on the renderer
@@ -27,7 +27,8 @@ export interface RegionCreatedDetail {
 export interface RegionUpdatedDetail {
   readonly id: string;
   readonly element: Element;
-  readonly diagnostics: ReadonlyArray<Diagnostic>;
+  /** Parser and contract diagnostics for the region's current source. */
+  readonly diagnostics: ReadonlyArray<HtmdDiagnostic>;
 }
 
 export interface RegionDoneDetail {

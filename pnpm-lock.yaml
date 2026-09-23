@@ -23,6 +23,9 @@ importers:
 
   examples/minimal-consumer:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@htmdjs/elements':
         specifier: workspace:*
         version: link:../../packages/elements
@@ -39,6 +42,9 @@ importers:
 
   examples/playground:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@htmdjs/elements':
         specifier: workspace:*
         version: link:../../packages/elements
@@ -74,8 +80,33 @@ importers:
         specifier: ^6.0.5
         version: 6.4.2
 
+  packages/contracts:
+    dependencies:
+      '@htmdjs/parser':
+        specifier: workspace:*
+        version: link:../parser
+      '@htmdjs/wire':
+        specifier: workspace:*
+        version: link:../wire
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
+    devDependencies:
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
   packages/elements:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser
@@ -98,6 +129,9 @@ importers:
 
   packages/htmd:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@htmdjs/elements':
         specifier: workspace:*
         version: link:../elements
@@ -126,12 +160,12 @@ importers:
 
   packages/react:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@htmdjs/elements':
         specifier: workspace:*
         version: link:../elements
-      '@htmdjs/parser':
-        specifier: workspace:*
-        version: link:../parser
       '@htmdjs/renderer':
         specifier: workspace:*
         version: link:../renderer
@@ -166,6 +200,9 @@ importers:
 
   packages/renderer:
     dependencies:
+      '@htmdjs/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@htmdjs/parser':
         specifier: workspace:*
         version: link:../parser

@@ -3,6 +3,7 @@ import type { WireEvent } from '@htmdjs/wire';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { WIRE_FIXTURES, type WireFixture } from './fixtures.js';
+import { playgroundHost } from './host.js';
 
 type PlaybackState = 'paused' | 'playing' | 'done';
 type ChunkMode = 'wire' | 'word' | 'char';
@@ -108,7 +109,7 @@ export function StreamingTab(): JSX.Element {
     if (container === null) {
       return;
     }
-    rendererRef.current = new RegionTreeRenderer(container);
+    rendererRef.current = new RegionTreeRenderer(container, { host: playgroundHost });
     return () => {
       rendererRef.current = undefined;
       container.replaceChildren();

@@ -14,8 +14,11 @@ import type {
 
 interface ParseState {
   readonly streaming: boolean;
+  readonly maxDepth: number;
   pending: boolean;
 }
+
+const DEFAULT_MAX_DEPTH = 64;
 
 /**
  * Parse a `.htmd` source string into a typed AST.
@@ -27,6 +30,9 @@ interface ParseState {
  * - Plain HTML tags (no hyphen) are not recognised by the tokenizer; they
  *   remain inside markdown spans. Forbidden constructs (`<script>`, `on*=`
  *   attributes, `javascript:` URLs) surface as error diagnostics.
+ * - Unmatched closing tags and tags nested deeper than `maxDepth` stay
+ *   literal text, merged into the surrounding markdown span. The depth bound
+ *   also bounds recursion here and in every consumer that walks the tree.
  *
  * Singleton: `Parser` holds no per-source state. Each call to `parse(source)`
  * constructs a fresh `TokenCursor` and walks it.
@@ -49,9 +55,10 @@ export class Parser {
     const diagnostics: Diagnostic[] = [...tokenized.diagnostics];
     const state: ParseState = {
       streaming: options.streaming === true,
+      maxDepth: options.maxDepth ?? DEFAULT_MAX_DEPTH,
       pending: tokenized.pending,
     };
-    const nodes = this.parseNodes(source, cursor, undefined, diagnostics, state);
+    const { nodes } = this.parseNodes(source, cursor, undefined, 0, diagnostics, state);
 
     return {
       document: { nodes, source },
@@ -64,40 +71,72 @@ export class Parser {
     return { nodes: [], source: '' };
   }
 
+  /**
+   * Parses siblings until `closingTag` (or EOF). `depth` counts the enclosing
+   * elements. Markdown and literal tag text accumulate into one contiguous
+   * span, flushed when an element node or the end of the siblings is reached.
+   * Closing tags of openings left literal for depth close them as text.
+   */
   private parseNodes(
     source: string,
     cursor: TokenCursor,
     closingTag: string | undefined,
+    depth: number,
     diagnostics: Diagnostic[],
     state: ParseState,
-  ): readonly HtmdNode[] {
+  ): { readonly nodes: readonly HtmdNode[]; readonly closed: boolean } {
     const nodes: HtmdNode[] = [];
+    let textStart = -1;
+    let textEnd = -1;
+    let reportedTooDeep = false;
+    const literalTags: string[] = [];
+    const appendText = (start: number, end: number): void => {
+      if (start === end) {
+        return;
+      }
+      if (textStart !== -1 && textEnd === start) {
+        textEnd = end;
+        return;
+      }
+      flushText();
+      textStart = start;
+      textEnd = end;
+    };
+    const flushText = (): void => {
+      if (textStart === -1) {
+        return;
+      }
+      const block: MarkdownBlock = {
+        type: 'markdown',
+        source: source.slice(textStart, textEnd),
+        start: textStart,
+        end: textEnd,
+      };
+      nodes.push(block);
+      textStart = -1;
+    };
 
     while (!cursor.eof()) {
       const token = cursor.peek();
       if (token === undefined) {
         break;
       }
+      cursor.advance();
 
       if (token.kind === 'markdown') {
-        cursor.advance();
-        if (token.value.length === 0) {
-          continue;
-        }
-        const block: MarkdownBlock = {
-          type: 'markdown',
-          source: token.value,
-          start: token.start,
-          end: token.end,
-        };
-        nodes.push(block);
+        appendText(token.start, token.end);
         continue;
       }
 
       if (token.kind === 'element-close') {
+        if (literalTags.at(-1) === token.tag) {
+          literalTags.pop();
+          appendText(token.start, token.end);
+          continue;
+        }
         if (closingTag !== undefined && token.tag === closingTag) {
-          cursor.advance();
-          return nodes;
+          flushText();
+          return { nodes, closed: true };
         }
         diagnostics.push({
           severity: DiagnosticSeverity.Warning,
@@ -106,24 +145,38 @@ export class Parser {
           start: token.start,
           end: token.end,
         });
-        nodes.push({
-          type: 'markdown',
-          source: source.slice(token.start, token.end),
-          start: token.start,
-          end: token.end,
-        });
-        cursor.advance();
+        appendText(token.start, token.end);
         continue;
       }
 
-      cursor.advance();
-      nodes.push(this.buildElementNode(source, token, cursor, diagnostics, state));
+      if (depth >= state.maxDepth) {
+        // One report per parent: a flood of deep openings stays one diagnostic.
+        if (!reportedTooDeep) {
+          reportedTooDeep = true;
+          diagnostics.push({
+            severity: DiagnosticSeverity.Error,
+            code: DiagnosticCode.NestingTooDeep,
+            message: `custom elements nest deeper than ${state.maxDepth} levels; <${token.tag}> is left as text`,
+            start: token.start,
+            end: token.end,
+          });
+        }
+        if (!token.selfClosing) {
+          literalTags.push(token.tag);
+        }
+        appendText(token.start, token.end);
+        continue;
+      }
+
+      flushText();
+      nodes.push(this.buildElementNode(source, token, cursor, depth + 1, diagnostics, state));
     }
+    flushText();
 
     if (closingTag !== undefined) {
       if (state.streaming) {
         state.pending = true;
-        return nodes;
+        return { nodes, closed: false };
       }
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
@@ -134,13 +187,14 @@ export class Parser {
       });
     }
 
-    return nodes;
+    return { nodes, closed: false };
   }
 
   private buildElementNode(
     source: string,
     openToken: ElementOpenToken,
     cursor: TokenCursor,
+    depth: number,
     diagnostics: Diagnostic[],
     state: ParseState,
   ): ElementBlock {
@@ -151,13 +205,21 @@ export class Parser {
         attrs: openToken.attrs,
         children: [],
         selfClosing: true,
+        complete: true,
         source: source.slice(openToken.start, openToken.end),
         start: openToken.start,
         end: openToken.end,
       };
     }
 
-    const children = this.parseNodes(source, cursor, openToken.tag, diagnostics, state);
+    const { nodes: children, closed } = this.parseNodes(
+      source,
+      cursor,
+      openToken.tag,
+      depth,
+      diagnostics,
+      state,
+    );
     const closingEnd = cursor.lastConsumedEnd();
 
     return {
@@ -166,6 +228,7 @@ export class Parser {
       attrs: openToken.attrs,
       children,
       selfClosing: false,
+      complete: closed,
       source: source.slice(openToken.start, closingEnd),
       start: openToken.start,
       end: closingEnd,

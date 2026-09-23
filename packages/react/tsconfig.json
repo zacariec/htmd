@@ -7,7 +7,7 @@
     "jsx": "react-jsx"
   },
   "references": [
-    { "path": "../parser" },
+    { "path": "../contracts" },
     { "path": "../wire" },
     { "path": "../elements" },
     { "path": "../renderer" }

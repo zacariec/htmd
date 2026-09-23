@@ -37,6 +37,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@htmdjs/contracts": "workspace:*",
     "@htmdjs/parser": "workspace:*",
     "@htmdjs/wire": "workspace:*",
     "micromark": "^4.0.1",

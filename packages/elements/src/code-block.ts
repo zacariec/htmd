@@ -42,7 +42,11 @@ export class CodeBlock extends LitElement {
 
   public static override properties = {
     language: { type: String, reflect: true },
-    showCopy: { type: Boolean, attribute: 'show-copy' },
+    // Only "false" hides the button; absent, empty, and "true" show it.
+    showCopy: {
+      attribute: 'show-copy',
+      converter: { fromAttribute: (value: string | null): boolean => value !== 'false' },
+    },
   };
 
   public language: string = '';
@@ -61,7 +65,13 @@ export class CodeBlock extends LitElement {
     return html`
       <div class="header">
         <span>${this.language || 'code'}</span>
-        ${this.showCopy ? html`<button @click=${this.handleCopy}>copy</button>` : undefined}
+        ${
+          this.showCopy
+            ? html`<button type="button" aria-label="Copy code" @click=${this.handleCopy}>
+                copy
+              </button>`
+            : undefined
+        }
       </div>
       <pre><code><slot></slot></code></pre>
     `;

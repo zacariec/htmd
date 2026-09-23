@@ -1,16 +1,18 @@
+import { ComponentEvents, RefineDetail, originRegion } from '@htmdjs/contracts';
 import { LitElement, css, html } from 'lit';
 import type { TemplateResult } from 'lit';
 
-import { HtmdElementEvents } from './events.js';
-import type { RefineDetail } from './events.js';
+import { HtmdElementsLogger } from './internal/logger.js';
 
 /**
  * `<refine-prompt>` — a re-prompt affordance attached to a region.
  *
- * On submit, dispatches the `refine` event with `{ target, prompt }` and
- * disables itself. Completion contract: the consumer that handled the refine
- * calls `element.reset()` when the round-trip finishes (pass `true` to also
- * clear the textarea). The element never re-enables itself.
+ * On submit, dispatches the `refine` intent with `{ target, prompt, region }`
+ * and disables itself; nothing is emitted unless the detail validates.
+ * Completion contract: the consumer that handled the refine calls
+ * `element.reset()` when the round-trip finishes (pass `true` to also clear
+ * the textarea). The element never re-enables itself. The draft lives in the
+ * textarea, so source updates never reset it.
  */
 export class RefinePrompt extends LitElement {
   public static override styles = css`
@@ -88,14 +90,28 @@ export class RefinePrompt extends LitElement {
   private readonly handleSubmit = (event: Event): void => {
     event.preventDefault();
     const textarea = this.renderRoot.querySelector('textarea') ?? undefined;
-    if (textarea === undefined || textarea.value.trim().length === 0) {
+    if (this.submitting || textarea === undefined) {
+      return;
+    }
+    const prompt = textarea.value.trim();
+    if (prompt.length === 0) {
+      return;
+    }
+    const detail = RefineDetail.safeParse({
+      target: this.target,
+      prompt,
+      region: originRegion(this),
+    });
+    if (!detail.success) {
+      HtmdElementsLogger.getInstance().warn(
+        `refine-prompt target "${this.target}" or its region is not a valid region id; not submitting`,
+      );
       return;
     }
     this.submitting = true;
-    const detail: RefineDetail = { target: this.target, prompt: textarea.value.trim() };
     this.dispatchEvent(
-      new CustomEvent(HtmdElementEvents.Refine, {
-        detail,
+      new CustomEvent<RefineDetail>(ComponentEvents.Refine, {
+        detail: detail.data,
         bubbles: true,
         composed: true,
       }),
@@ -105,7 +121,7 @@ export class RefinePrompt extends LitElement {
   public override render(): TemplateResult {
     return html`
       <div class="target">Refining: <code>${this.target}</code></div>
-      <form @submit=${this.handleSubmit}>
+      <form aria-busy=${this.submitting ? 'true' : 'false'} @submit=${this.handleSubmit}>
         <textarea
           placeholder=${this.placeholder}
           aria-label=${this.placeholder}

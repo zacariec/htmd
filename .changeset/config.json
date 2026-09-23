@@ -5,6 +5,7 @@
   "fixed": [
     [
       "@htmdjs/core",
+      "@htmdjs/contracts",
       "@htmdjs/parser",
       "@htmdjs/elements",
       "@htmdjs/wire",

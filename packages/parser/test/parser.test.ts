@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isCustomElementTag } from '../src/is-custom-element-tag.js';
 import { Parser } from '../src/parser.js';
 import { DiagnosticCode, DiagnosticSeverity } from '../src/types.js';
+import type { ElementBlock, HtmdNode } from '../src/types.js';
 
 const parser = Parser.getInstance();
 
@@ -196,7 +197,7 @@ describe('Parser — code suppression', () => {
   });
 });
 
-describe('Parser — fragment raw text', () => {
+describe('Parser — raw text', () => {
   it('treats fragment children as raw text, not nested elements', () => {
     const payload = '{"tag":"div","text":"<data-table src=\\"/x\\"/> is not scanned"}';
     const source = `<htmd-fragment kind="card">${payload}</htmd-fragment>`;
@@ -221,6 +222,116 @@ describe('Parser — fragment raw text', () => {
     const { diagnostics } = parser.parse('<htmd-fragment kind="card">{"tag":"div"}');
 
     expect(diagnostics.some((d) => d.code === DiagnosticCode.MissingClosingTag)).toBe(true);
+  });
+
+  it('keeps code-block content as one raw text child', () => {
+    const code = [
+      '# not a heading',
+      '```ts',
+      'const tag = `<image-card src="/x.png"/>`;',
+      '```',
+      '<choice-group name="q"><choice-item value="a">A</choice-item></choice-group>',
+      '</code-blocks> **still code**',
+    ].join('\n');
+    const source = `<code-block language="ts">${code}</code-block>\n\n<data-table src="/x"/>`;
+
+    for (const streaming of [false, true]) {
+      const { document, diagnostics } = parser.parse(source, { streaming });
+      expect(diagnostics).toEqual([]);
+      const [block, , table] = document.nodes;
+      if (block?.type !== 'element') throw new Error('expected code-block');
+      expect(block.tag).toBe('code-block');
+      expect(block.complete).toBe(true);
+      expect(block.children).toEqual([
+        {
+          type: 'markdown',
+          source: code,
+          start: block.start + 26,
+          end: block.start + 26 + code.length,
+        },
+      ]);
+      expect(table?.type === 'element' && table.tag).toBe('data-table');
+    }
+  });
+
+  it('uses the given raw-text tags instead of the defaults', () => {
+    const rawTextTags = new Set(['x-raw']);
+    const source = '<x-raw><x-child/></x-raw-more></x-raw><code-block><x-child/></code-block>';
+    const { document, diagnostics } = parser.parse(source, { rawTextTags });
+
+    expect(diagnostics).toEqual([]);
+    const [raw, code] = document.nodes;
+    if (raw?.type !== 'element' || code?.type !== 'element') throw new Error('expected elements');
+    expect(raw.children.map((child) => [child.type, child.source])).toEqual([
+      ['markdown', '<x-child/></x-raw-more>'],
+    ]);
+    expect(code.children.map((child) => child.type === 'element' && child.tag)).toEqual([
+      'x-child',
+    ]);
+  });
+});
+
+describe('Parser — nesting depth', () => {
+  function depthOf(nodes: readonly HtmdNode[]): number {
+    let depth = 0;
+    let current = nodes.find((node) => node.type === 'element');
+    while (current?.type === 'element') {
+      depth += 1;
+      current = current.children.find((node) => node.type === 'element');
+    }
+    return depth;
+  }
+
+  it('keeps openings beyond maxDepth as literal text with one error', () => {
+    const source = '<x-a><x-a><x-a>deep <x-c/></x-a> after</x-a></x-a>';
+    const { document, diagnostics } = parser.parse(source, { maxDepth: 2 });
+
+    expect(depthOf(document.nodes)).toBe(2);
+    expect(diagnostics.map((d) => [d.code, d.severity])).toEqual([
+      [DiagnosticCode.NestingTooDeep, DiagnosticSeverity.Error],
+    ]);
+    const outer = document.nodes[0];
+    if (outer?.type !== 'element') throw new Error('expected outer element');
+    const inner = outer.children[0];
+    if (inner?.type !== 'element') throw new Error('expected inner element');
+    expect([outer.complete, inner.complete]).toEqual([true, true]);
+    expect(inner.children.map((child) => [child.type, child.source])).toEqual([
+      ['markdown', '<x-a>deep <x-c/></x-a> after'],
+    ]);
+  });
+
+  it('parses a megabyte of nested openings without exhausting the stack', () => {
+    const source = '<x-a>'.repeat(200_000);
+    for (const streaming of [false, true]) {
+      const { document, diagnostics } = parser.parse(source, { streaming });
+
+      expect(depthOf(document.nodes)).toBe(64);
+      expect(diagnostics.filter((d) => d.code === DiagnosticCode.NestingTooDeep)).toHaveLength(1);
+    }
+  });
+});
+
+describe('Parser — element completeness', () => {
+  function firstElement(source: string, streaming: boolean): ElementBlock {
+    const node = parser.parse(source, { streaming }).document.nodes[0];
+    if (node?.type !== 'element') throw new Error('expected element');
+    return node;
+  }
+
+  it('marks self-closing and closed elements complete in both modes', () => {
+    for (const streaming of [false, true]) {
+      expect(firstElement('<image-card src="/x.png"/>', streaming).complete).toBe(true);
+      expect(firstElement('<choice-item value="a">A</choice-item>', streaming).complete).toBe(true);
+    }
+  });
+
+  it('marks an element without its closing tag incomplete while streaming and on finalization', () => {
+    const source = '<choice-group name="q"><choice-item value="a">A</choice-item>';
+    for (const streaming of [false, true]) {
+      const group = firstElement(source, streaming);
+      expect(group.complete).toBe(false);
+      expect(group.children[0]?.type === 'element' && group.children[0].complete).toBe(true);
+    }
   });
 });
 

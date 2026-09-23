@@ -1,8 +1,13 @@
-import { LitElement, css, html, nothing } from 'lit';
+import { authorizeComponentUrl, requestHtmdHost } from '@htmdjs/contracts';
+import { LitElement, css, html } from 'lit';
 import type { TemplateResult } from 'lit';
 
-import { sanitizeUrl } from './internal/sanitize-url.js';
-
+/**
+ * `<image-card>` — an image with required alt text and optional caption.
+ *
+ * `src` loads only when the host authorizes it for "image"; otherwise the alt
+ * text is shown in the image's place.
+ */
 export class ImageCard extends LitElement {
   public static override styles = css`
     :host {
@@ -20,6 +25,16 @@ export class ImageCard extends LitElement {
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+    .placeholder {
+      display: grid;
+      place-items: center;
+      box-sizing: border-box;
+      height: 100%;
+      min-height: 64px;
+      padding: 16px;
+      font-size: 13px;
+      opacity: 0.8;
     }
     figcaption {
       padding: 8px 12px;
@@ -43,12 +58,18 @@ export class ImageCard extends LitElement {
   public caption: string = '';
 
   public override render(): TemplateResult {
-    const aspectRatio = this.aspectRatioStyle();
-    const safeSrc = this.src.length > 0 ? sanitizeUrl(this.src) : undefined;
+    const url =
+      this.src.length > 0
+        ? authorizeComponentUrl(this, this.src, 'image', requestHtmdHost(this))
+        : undefined;
     return html`
       <figure>
-        <div class="frame" style=${aspectRatio}>
-          <img src=${safeSrc ?? nothing} alt=${this.alt} loading="lazy" />
+        <div class="frame" style=${this.aspectRatioStyle()}>
+          ${
+            url === undefined
+              ? html`<div class="placeholder" role="img" aria-label=${this.alt}>${this.alt}</div>`
+              : html`<img src=${url.href} alt=${this.alt} loading="lazy" />`
+          }
         </div>
         ${this.caption.length > 0 ? html`<figcaption>${this.caption}</figcaption>` : undefined}
       </figure>

@@ -1,8 +1,9 @@
 /**
- * Shared URL sanitizer — the URL security gate for `@htmdjs/elements`.
+ * Shared URL scheme gate for `.htmd` components.
  *
  * `.htmd` attribute values are producer-controlled (usually model-authored),
- * so every URL that reaches an `href` or `src` binding goes through here.
+ * so every URL that reaches an `href` or `src` binding goes through here
+ * before host authorization.
  *
  * Policy:
  * - Relative URLs, `#` fragments, and `?` queries are allowed.

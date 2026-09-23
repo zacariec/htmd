@@ -1,8 +1,11 @@
+import { authorizeComponentUrl, requestHtmdHost } from '@htmdjs/contracts';
 import { LitElement, css, html } from 'lit';
 import type { TemplateResult } from 'lit';
 
-import { sanitizeUrl } from './internal/sanitize-url.js';
-
+/**
+ * `<file-preview>` — a file reference. The download link appears only when
+ * the host authorizes `href` for "download".
+ */
 export class FilePreview extends LitElement {
   public static override styles = css`
     :host {
@@ -61,19 +64,23 @@ export class FilePreview extends LitElement {
   public href: string = '';
 
   public override render(): TemplateResult {
-    const safeHref = this.href.length > 0 ? sanitizeUrl(this.href) : undefined;
+    const url =
+      this.href.length > 0
+        ? authorizeComponentUrl(this, this.href, 'download', requestHtmdHost(this))
+        : undefined;
     return html`
       <div class="icon">${this.iconLabel()}</div>
       <div class="meta">
         <span class="name">${this.name}</span>
         <span class="size">${this.formatSize(this.sizeBytes)} · ${this.mime}</span>
       </div>
-      ${
-        safeHref === undefined
-          ? undefined
-          : html`<a href=${safeHref} download=${this.name}>download</a>`
-      }
+      ${url === undefined ? undefined : this.renderLink(url)}
     `;
+  }
+
+  private renderLink(url: URL): TemplateResult {
+    const label = `Download ${this.name}`;
+    return html`<a href=${url.href} download=${this.name} aria-label=${label}>download</a>`;
   }
 
   private iconLabel(): string {

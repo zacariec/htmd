@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@htmdjs/contracts": "workspace:*",
     "@htmdjs/elements": "workspace:*",
     "@htmdjs/react": "workspace:*",
     "@htmdjs/renderer": "workspace:*",
