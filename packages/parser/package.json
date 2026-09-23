@@ -1,6 +1,6 @@
 {
   "name": "@htmdjs/parser",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "Parse .htmd source into a typed AST",
   "license": "MIT",
   "type": "module",
