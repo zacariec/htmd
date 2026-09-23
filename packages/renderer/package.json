@@ -1,6 +1,6 @@
 {
   "name": "@htmdjs/renderer",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "description": "Framework-agnostic DOM materializer for .htmd — static render and streaming region trees",
   "license": "MIT",
   "type": "module",
