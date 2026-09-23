@@ -1,7 +1,7 @@
 {
   "name": "htmd-monorepo",
   "private": true,
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Streamable HTML+Markdown wire format for AI output",
   "license": "MIT",
   "type": "module",

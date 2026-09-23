@@ -58,7 +58,7 @@ Registration in the global custom-element registry is not permission: a renderer
 `resolveComponent(node, catalog, { streaming })` decides how a parsed element renders. Precedence: availability → version pin → completeness → attributes → component rules.
 
 - `render`: instantiate with `attrs` — validated, declared attributes only. Unknown attributes are dropped with a warning.
-- `defer`: a `complete`-policy component is still streaming; render nothing yet.
+- `defer`: a `complete`-policy component is still streaming; do not instantiate it yet (the renderer shows a `data-htmd-deferred` placeholder).
 - `fallback`: do not instantiate; render a neutral text projection. Produced by an unknown component, an unsupported version pin, a `complete`-policy component that ended without its closing tag in final parsing, a missing or invalid attribute, or an error from `validate`.
 
 `resolveChildren(node, contract)` returns the children a rendered component receives, dropping disallowed content with warnings.

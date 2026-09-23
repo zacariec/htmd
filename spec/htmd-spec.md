@@ -1,7 +1,7 @@
 # `.htmd` Specification
 
 **Status:** 0.1 alpha.
-**Version:** `0.1.0-alpha.2`
+**Version:** `0.1.0-alpha.3`
 
 ## 1. What `.htmd` is
 
@@ -62,7 +62,23 @@ Final parsing (`Parser.parse(source)`) clears `pending`, preserves unfinished cu
 
 Whether an open component renders while streaming is decided by its contract's partial policy (§4.4).
 
-Markdown stays provisional: unfinished emphasis can remain literal and later reference definitions can affect earlier output. No synthetic delimiters or URL destinations are invented. The renderer marks known pending source with `data-htmd-pending`; this is not an exhaustive detector of unfinished Markdown.
+### Partial Markdown
+
+Only the *frontier* of a streaming region can be incomplete: the last Markdown node in the region, including the last child of a component that is itself still streaming. Blocks before a blank line, a closed fence, or a later component are finished. While streaming, the renderer renders the frontier as provisional Markdown under three rules:
+
+1. **Complete what is unambiguous.** Open emphasis, strong, strikethrough, and inline code are closed at the end of the text, and partial closers are completed: `Revenue grew **12` shows bold `12`, and `**Hello*` shows bold `Hello`.
+2. **Withhold what is ambiguous.** A last line containing only block markers (`-`, `1.`, `>`, `#`, `|`, backticks, a task `[x`); a table header until a matching delimiter row arrives; a partial closing fence inside an open code block; an unresolved `[` (a link, citation, or literal text) until it resolves; a closed `[label]` still awaiting its destination; a trailing `!`.
+3. **Never make partial things interactive.** A link whose destination is still streaming shows its label as plain text. Partial images and partial `<…>` angle autolinks are withheld. A trailing bare URL or email streams as visible, escaped, unlinked text and becomes a link once whitespace ends it.
+
+Intraword delimiters (`2*3`, `snake_case`) stay literal. No destinations are invented.
+
+The reference renderer's test suite streams a corpus of 9 documents character by character (about 1,400 prefixes) and asserts three properties for every prefix: **no syntax flashes** (the visible text of each prefix is a prefix of the final visible text), **no retraction** (visible text only grows), and **no premature links** (every link or image shown mid-stream has its final destination). Without the repair, the same corpus shows 436 flashing prefixes, 46 retractions, and 97 premature links.
+
+Finalization (`region-done`, `doc-done`) and every static render use ordinary CommonMark + GFM semantics. The provisional view never affects the final document.
+
+The renderer sets `data-htmd-pending` on a region while it has known incomplete custom syntax or a provisional Markdown frontier.
+
+### Attribute values
 
 Attribute values decode `amp`, `lt`, `gt`, `quot`, `apos`, and valid numeric Unicode references exactly once. Unknown and invalid references stay literal. This incorporates Bench's attribute round-trip fix.
 
@@ -137,7 +153,7 @@ An event that would exceed a limit is rejected, a non-recoverable error is emitt
 
 Streaming appends reconcile the affected region instead of replacing every DOM child. Unchanged component instances retain shadow DOM, focused drafts, selected choices, loaded data, and runtime-reflected attributes. Reconciliation is positional, not a keyed-movement algorithm. Attribute updates follow ownership (§4.5).
 
-The current parser still reparses the accumulated region buffer. The renderer skips unchanged blocks and reconciles changed Markdown DOM; it is not a fully incremental Markdown parser.
+The parser reparses the accumulated region buffer on every chunk; HTMD is not a fully incremental Markdown parser. The renderer skips unchanged blocks, reconciles changed Markdown DOM, and renders the streaming frontier provisionally (§2).
 
 The React hook accepts decoded event iterables, decoded `ReadableStream<WireEvent>` instances, and EventSource JSON messages. It reports `done` only after an accepted `doc-done`; nonempty finite streams ending earlier report interruption. Empty streams remain idle. Completion/fatal errors stop consumption. Cleanup cancels owned readers and removes listeners without closing a caller-owned EventSource. Source replacement resets prior document/error state.
 
@@ -179,7 +195,7 @@ Components obtain their host at effect time through a bubbling, composed DOM req
 For each custom element the renderer resolves the contract from the host catalog. Precedence: availability → version pin → completeness → attributes → component rules.
 
 - **Render.** The component is instantiated with validated, declared attributes only. **Unknown attributes are ignored** with a warning. Children follow the contract; disallowed children are dropped with a warning.
-- **Defer.** A `complete`-policy component whose closing tag has not arrived renders nothing yet and keeps its position.
+- **Defer.** A `complete`-policy component whose closing tag has not arrived is not instantiated. The renderer holds its position with exactly one placeholder, `<div data-htmd-deferred="{tag}" aria-busy="true">`, a styleable skeleton hook that is replaced by the component when its closing tag arrives.
 - **Fallback.** The component is not instantiated. Causes: the tag is not in the catalog; `data-htmd-version` pins an unsupported version; a `complete`-policy component is still unclosed at finalization; a required attribute is missing; an attribute value fails its schema; or a component rule reports an error.
 
 A fallback renders `<div data-htmd-fallback="{tag}">` and never instantiates components inside it. For a `text`-children contract it shows the raw text in a `<pre>`; otherwise it renders the Markdown found anywhere inside the element, with component wrappers flattened. Readers keep the content; nothing half-configured becomes interactive.
@@ -189,7 +205,7 @@ When a block's resolution kind or tag changes (for example, from defer to render
 ### 4.4 Partial policies
 
 - `progressive`: renders while its closing tag is still streaming. Available children render as they arrive.
-- `complete`: not instantiated until its closing (or self-closing) tag arrives, so partial content is never interactive. While streaming it is deferred; if it is still unclosed when the region finalizes, it falls back with an `incomplete-component` error.
+- `complete`: not instantiated until its closing (or self-closing) tag arrives, so partial content is never interactive. While streaming it is deferred behind a `data-htmd-deferred` placeholder; if it is still unclosed when the region finalizes, it falls back with an `incomplete-component` error.
 
 A component's data can also be partial: `<data-table>` shows validated row batches as they arrive, and incomplete rows never render.
 

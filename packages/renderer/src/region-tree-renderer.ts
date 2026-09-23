@@ -13,7 +13,7 @@ import type {
   WireEvent,
 } from '@htmdjs/wire';
 
-import { applySafeAttrs, materializeInto } from './materialize.js';
+import { applySafeAttrs, materializeStreaming } from './materialize.js';
 import { RendererEvents } from './renderer-events.js';
 import type {
   DocDoneDetail,
@@ -631,12 +631,13 @@ export class RegionTreeRenderer extends EventTarget {
       streaming: !final,
       rawTextTags: this.rawTextTags,
     });
-    const contractDiagnostics = materializeInto(region.contentElement, result.document.nodes, {
+    const rendered = materializeStreaming(region.contentElement, result.document.nodes, {
       streaming: !final,
       host: this.host,
     });
-    region.element.toggleAttribute(PENDING_ATTR, result.pending);
-    return [...result.diagnostics, ...contractDiagnostics];
+    // Pending: known incomplete syntax, including a provisional Markdown frontier.
+    region.element.toggleAttribute(PENDING_ATTR, result.pending || rendered.provisional);
+    return [...result.diagnostics, ...rendered.diagnostics];
   }
 
   private registerRoot(): void {

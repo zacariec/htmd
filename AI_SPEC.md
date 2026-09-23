@@ -122,7 +122,7 @@ Region ids are `$`-rooted dot paths: `$.msg.body.tool-1`. Declare regions first,
 - After `doc-done` or a fatal error, start a new consumer context; do not continue the old document.
 - Use globally increasing `seq` values on an ordered transport. Replays are ignored; independent producers need a shared sequencer.
 - Stay within the host's limits (by default 1000 regions, region depth 32, 1 MB per region, 4 MB per document). Exceeding one ends the document.
-- Standard Markdown is provisional until completion. Do not rely on incomplete emphasis/link syntax having a finalized appearance.
+- The reader sees Markdown as it streams: unambiguous syntax is shown early, ambiguous syntax waits, and a half-written link is never clickable. Still close emphasis, links, and code fences promptly; the final document uses ordinary Markdown semantics.
 - Point `<refine-prompt target>` at a region you declared. Choice/refine events are handled by the host and report the region they came from. Replacing a region intentionally discards its local interaction state; appending prose does not.
 
 ## Anti-patterns

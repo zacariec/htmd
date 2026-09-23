@@ -101,17 +101,24 @@ function withoutAttribute(source: string, tag: string, name: string): string {
 }
 
 /** Complete elements with `tag` in a streaming parse of `prefix`. */
-function completeCount(prefix: string, tag: string): number {
-  let total = 0;
-  const walk = (nodes: readonly HtmdNode[]): void => {
+/**
+ * Occurrences of `tag` in a streaming parse of `prefix`: complete ones render;
+ * incomplete ones hold a deferred placeholder unless an ancestor is itself deferred.
+ */
+function occurrences(prefix: string, tag: string): { complete: number; deferred: number } {
+  const result = { complete: 0, deferred: 0 };
+  const walk = (nodes: readonly HtmdNode[], insideDeferred: boolean): void => {
     for (const node of nodes) {
       if (node.type !== 'element') continue;
-      if (node.tag === tag && node.complete) total += 1;
-      walk(node.children);
+      if (node.tag === tag && !insideDeferred) {
+        result[node.complete ? 'complete' : 'deferred'] += 1;
+      }
+      const deferred = !node.complete && baseCatalog.get(node.tag)?.partial === 'complete';
+      walk(node.children, insideDeferred || deferred);
     }
   };
-  walk(Parser.getInstance().parse(prefix, { streaming: true }).document.nodes);
-  return total;
+  walk(Parser.getInstance().parse(prefix, { streaming: true }).document.nodes, false);
+  return result;
 }
 
 const EFFECT_FOR_PURPOSE: Record<UrlPurpose, string> = {
@@ -172,9 +179,13 @@ describe.each(contracts.map((contract): [string, ComponentContract] => [contract
           expect(diagnostics, `prefix ${end}`).toEqual([]);
           for (const candidate of contracts) {
             if (candidate.partial === 'complete') {
-              expect(count(content, candidate.tag), `<${candidate.tag}> at prefix ${end}`).toBe(
-                completeCount(example.slice(0, end), candidate.tag),
+              const expected = occurrences(example.slice(0, end), candidate.tag);
+              const at = `<${candidate.tag}> at prefix ${end}`;
+              expect(count(content, candidate.tag), at).toBe(expected.complete);
+              const placeholders = content.querySelectorAll(
+                `[data-htmd-deferred="${candidate.tag}"][aria-busy="true"]`,
               );
+              expect(placeholders.length, at).toBe(expected.deferred);
             }
           }
         }

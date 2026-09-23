@@ -1,6 +1,6 @@
 {
   "name": "@htmdjs/core",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Streamable HTML+Markdown wire format for AI output — meta package. One install, one import.",
   "license": "MIT",
   "type": "module",

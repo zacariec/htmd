@@ -576,14 +576,14 @@ describe('render limits', () => {
 
   it('bounds the live buffered bytes of the whole document', () => {
     const { target, errors } = limited({ maxDocumentBytes: 10 });
-    target.apply({ type: 'stream', seq: 0, target: '$.a', chunk: '123456' });
-    target.apply({ type: 'stream', seq: 1, target: '$.a.child', chunk: '1234' });
+    target.apply({ type: 'stream', seq: 0, target: '$.a', chunk: 'abcdef' });
+    target.apply({ type: 'stream', seq: 1, target: '$.a.child', chunk: 'abcd' });
     // Replacing `$.a` releases its own buffer and its descendants'.
-    target.apply({ type: 'region-replace', seq: 2, id: '$.a', body: '1' });
-    expect(target.apply({ type: 'stream', seq: 3, target: '$.b', chunk: '123456789' })).toBe(true);
+    target.apply({ type: 'region-replace', seq: 2, id: '$.a', body: 'a' });
+    expect(target.apply({ type: 'stream', seq: 3, target: '$.b', chunk: 'abcdefghi' })).toBe(true);
     expect(target.apply({ type: 'stream', seq: 4, target: '$.b', chunk: '!' })).toBe(false);
 
-    expect(target.regionElement('$.b')?.textContent).toBe('123456789');
+    expect(target.regionElement('$.b')?.textContent).toBe('abcdefghi');
     expectClosedAfter(target, errors, '$.b', 3);
   });
 });

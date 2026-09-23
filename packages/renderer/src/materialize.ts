@@ -11,18 +11,24 @@ import { Parser } from '@htmdjs/parser';
 import type { ElementBlock, HtmdDocument, HtmdNode } from '@htmdjs/parser';
 
 import { renderMarkdown } from './markdown.js';
+import { provisionalMarkdown } from './streaming-markdown.js';
 
 /**
  * AST → DOM materializer — the single code path for turning parsed `.htmd`
  * nodes into live DOM. Used by the static render helper and by the streaming
  * `RegionTreeRenderer` (which re-materializes one region per chunk).
  *
- * Markdown blocks render through `renderMarkdown` (raw HTML escaped). Element
- * blocks resolve against the host's component catalog:
+ * Markdown blocks render through `renderMarkdown` (raw HTML escaped). While
+ * streaming, the frontier — the last Markdown node, including the last child
+ * of a component still streaming — renders as provisional Markdown: open
+ * inline syntax is completed and ambiguous syntax withheld, so readers never
+ * see markers that later vanish. Element blocks resolve against the host's
+ * component catalog:
  *
  * - `render`: a real element with validated, declared attributes only. The
  *   custom-element registry upgrades it. Children follow the contract.
- * - `defer`: nothing yet; the block keeps its position until it resolves.
+ * - `defer`: `<div data-htmd-deferred="tag" aria-busy="true">`, a styleable
+ *   placeholder holding the block's position until the component resolves.
  * - `fallback`: `<div data-htmd-fallback="tag">` holding a text projection.
  *   Nothing inside a fallback is ever instantiated.
  *
@@ -46,6 +52,7 @@ export interface RenderResult {
 }
 
 const FALLBACK_ATTR = 'data-htmd-fallback';
+const DEFERRED_ATTR = 'data-htmd-deferred';
 
 type BlockKind = 'markdown' | ComponentResolution['kind'];
 
@@ -54,6 +61,10 @@ interface RenderedBlock {
   kind: BlockKind;
   dom: Node[];
   streaming: boolean;
+  /** Rendered as the streaming frontier (provisional Markdown allowed). */
+  frontier: boolean;
+  /** The frontier Markdown in this block was completed or withheld. */
+  provisional: boolean;
   catalog: ComponentCatalog;
   /** Contract diagnostics of this block's subtree, reused while it is unchanged. */
   diagnostics: readonly ContractDiagnostic[];
@@ -64,19 +75,39 @@ const sourceAttributes = new WeakMap<Element, Readonly<Record<string, string>>>(
 
 /**
  * Reconcile positional source blocks, retaining live elements and their state.
- * Only changed blocks are resolved and rendered again; Markdown remains
- * provisional while streaming, with the same safe rendering policy as
- * final/static output. A block whose resolution kind or tag changes is
- * replaced. Clearing the target explicitly discards its previous
- * materialization. Returns the contract diagnostics for `nodes`.
+ * Only changed blocks are resolved and rendered again. A block whose
+ * resolution kind or tag changes is replaced. Clearing the target explicitly
+ * discards its previous materialization. Returns the contract diagnostics for
+ * `nodes`.
  */
 export function materializeInto(
   target: Element,
   nodes: ReadonlyArray<HtmdNode>,
   options: MaterializeOptions = {},
 ): readonly ContractDiagnostic[] {
+  return materializeStreaming(target, nodes, options).diagnostics;
+}
+
+/**
+ * `materializeInto` that also reports whether the streaming frontier is
+ * provisional. Internal to the renderer package.
+ */
+export function materializeStreaming(
+  target: Element,
+  nodes: ReadonlyArray<HtmdNode>,
+  options: MaterializeOptions,
+): { readonly diagnostics: readonly ContractDiagnostic[]; readonly provisional: boolean } {
   const streaming = options.streaming === true;
-  const host = options.host ?? defaultHost;
+  return materializeNodes(target, nodes, streaming, options.host ?? defaultHost, streaming);
+}
+
+function materializeNodes(
+  target: Element,
+  nodes: ReadonlyArray<HtmdNode>,
+  streaming: boolean,
+  host: HtmdHost,
+  frontier: boolean,
+): { readonly diagnostics: readonly ContractDiagnostic[]; readonly provisional: boolean } {
   const catalog = host.components;
   let blocks = renderedBlocks.get(target);
   if (
@@ -91,22 +122,26 @@ export function materializeInto(
   }
 
   const diagnostics: ContractDiagnostic[] = [];
+  let provisional = false;
   let index = 0;
   let cursor = target.firstChild;
   for (const node of nodes) {
     const previous = blocks[index];
     const last = previous?.dom.at(-1);
     const after = last === undefined ? cursor : last.nextSibling;
+    const atFrontier = frontier && index === nodes.length - 1;
     if (
       previous === undefined ||
       previous.node.type !== node.type ||
       previous.node.source !== node.source ||
       previous.streaming !== streaming ||
+      previous.frontier !== atFrontier ||
       previous.catalog !== catalog
     ) {
-      blocks[index] = renderBlock(target, node, previous, cursor, streaming, host);
+      blocks[index] = renderBlock(target, node, previous, cursor, streaming, host, atFrontier);
     }
     diagnostics.push(...(blocks[index]?.diagnostics ?? []));
+    provisional ||= blocks[index]?.provisional === true;
     cursor = after;
     index += 1;
   }
@@ -116,7 +151,7 @@ export function materializeInto(
     }
   }
   blocks.length = index;
-  return diagnostics;
+  return { diagnostics, provisional };
 }
 
 /**
@@ -149,15 +184,26 @@ function renderBlock(
   cursor: Node | null,
   streaming: boolean,
   host: HtmdHost,
+  frontier: boolean,
 ): RenderedBlock {
   const catalog = host.components;
   if (node.type === 'markdown') {
-    const incoming = markdownNodes(target, node.source);
+    const view = frontier ? provisionalMarkdown(node.source) : undefined;
+    const incoming = markdownNodes(target, view?.source ?? node.source);
     const dom =
       previous?.kind === 'markdown'
         ? reconcileDom(target, previous.dom, incoming, cursor)
         : replaceDom(target, previous, incoming, cursor);
-    return { node, kind: 'markdown', dom, streaming, catalog, diagnostics: [] };
+    return {
+      node,
+      kind: 'markdown',
+      dom,
+      streaming,
+      frontier,
+      provisional: view?.provisional === true,
+      catalog,
+      diagnostics: [],
+    };
   }
 
   const resolved = resolveComponent(node, catalog, { streaming });
@@ -169,6 +215,7 @@ function renderBlock(
     previous.node.type === 'element' &&
     previous.node.tag === node.tag;
   let dom: Node[];
+  let provisional = false;
   switch (resolution.kind) {
     case 'render': {
       const existing = reusable ? (previous.dom[0] as Element | undefined) : undefined;
@@ -182,13 +229,30 @@ function renderBlock(
       } else {
         reconcileAttrs(element, sourceOwned(resolution.contract, resolution.attrs));
       }
-      renderChildren(element, node, resolution.contract, streaming, host, diagnostics);
+      // Only a component still streaming carries the frontier into its children.
+      provisional = renderChildren(
+        element,
+        node,
+        resolution.contract,
+        streaming,
+        host,
+        frontier && !node.complete,
+        diagnostics,
+      );
       dom = existing === undefined ? replaceDom(target, previous, [element], cursor) : [element];
       break;
     }
-    case 'defer':
-      dom = reusable ? [] : replaceDom(target, previous, [], cursor);
+    case 'defer': {
+      if (reusable && previous.dom[0] !== undefined) {
+        dom = previous.dom;
+        break;
+      }
+      const placeholder = target.ownerDocument.createElement('div');
+      placeholder.setAttribute(DEFERRED_ATTR, node.tag);
+      placeholder.setAttribute('aria-busy', 'true');
+      dom = replaceDom(target, previous, [placeholder], cursor);
       break;
+    }
     case 'fallback': {
       const existing = reusable ? (previous.dom[0] as Element | undefined) : undefined;
       const wrapper = existing ?? target.ownerDocument.createElement('div');
@@ -204,7 +268,16 @@ function renderBlock(
       break;
     }
   }
-  return { node, kind: resolution.kind, dom, streaming, catalog, diagnostics };
+  return {
+    node,
+    kind: resolution.kind,
+    dom,
+    streaming,
+    frontier,
+    provisional,
+    catalog,
+    diagnostics,
+  };
 }
 
 /** Inserts `dom` at the block position and removes the block's previous DOM. */
@@ -223,28 +296,33 @@ function replaceDom(
   return dom;
 }
 
+/** Materializes a rendered component's children; returns whether its frontier is provisional. */
 function renderChildren(
   element: Element,
   node: ElementBlock,
   contract: ComponentContract,
   streaming: boolean,
   host: HtmdHost,
+  frontier: boolean,
   diagnostics: ContractDiagnostic[],
-): void {
+): boolean {
   const content = resolveChildren(node, contract);
   diagnostics.push(...content.diagnostics);
   switch (contract.children.kind) {
     case 'none':
-      return;
+      return false;
     case 'text': {
       const text = rawTextOf(node);
       if (element.textContent !== text) {
         element.textContent = text;
       }
-      return;
+      return false;
     }
-    default:
-      diagnostics.push(...materializeInto(element, content.children, { streaming, host }));
+    default: {
+      const result = materializeNodes(element, content.children, streaming, host, frontier);
+      diagnostics.push(...result.diagnostics);
+      return result.provisional;
+    }
   }
 }
 

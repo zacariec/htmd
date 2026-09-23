@@ -1,6 +1,6 @@
 {
   "name": "@htmdjs/react",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "React adapter for .htmd — static <HtmdDoc/> and streaming useHtmdStream() hook",
   "license": "MIT",
   "type": "module",

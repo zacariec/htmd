@@ -9,8 +9,8 @@ import type { ComponentContract, ContractDiagnostic } from './types.js';
 /**
  * - `render`: instantiate the component with `attrs` (validated, declared
  *   attributes only).
- * - `defer`: a `complete`-policy component is still streaming; render nothing
- *   yet.
+ * - `defer`: a `complete`-policy component is still streaming; do not
+ *   instantiate it yet (renderers hold its position with a placeholder).
  * - `fallback`: do not instantiate; render a neutral text projection.
  */
 export type ComponentResolution =

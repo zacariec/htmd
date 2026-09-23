@@ -1,6 +1,6 @@
 {
   "name": "@htmdjs/elements",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "Lit web components — the base element set for .htmd",
   "license": "MIT",
   "type": "module",
