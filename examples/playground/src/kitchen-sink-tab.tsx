@@ -3,6 +3,7 @@ import type { ChoiceDetail, HtmdDiagnostic, HtmdHost, RefineDetail } from '@htmd
 import type { RefinePrompt } from '@htmdjs/elements';
 import { DEFAULT_RENDER_LIMITS, RegionTreeRenderer, RendererEvents } from '@htmdjs/renderer';
 import type { RegionUpdatedDetail, RenderLimits, RendererErrorDetail } from '@htmdjs/renderer';
+import { WireWriter } from '@htmdjs/wire';
 import type { JSX } from 'react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -81,11 +82,11 @@ function chunkSource(source: string, mode: ChunkMode): readonly string[] {
 
 interface Session {
   readonly renderer: RegionTreeRenderer;
+  readonly writer: WireWriter;
   readonly chunks: readonly string[];
   /** False for instant re-renders after a settings change; those don't log completion. */
   readonly announce: boolean;
   index: number;
-  seq: number;
   finished: boolean;
 }
 
@@ -172,14 +173,15 @@ export function KitchenSinkTab(): JSX.Element {
           setStatus('failed');
         }
       });
-      renderer.apply({ type: 'doc-open', seq: 0, id: DOC_ID, schemaVersion: '0.1' });
-      renderer.apply({ type: 'region', seq: 1, id: REGION, tag: 'article' });
+      const writer = new WireWriter(DOC_ID);
+      renderer.apply(writer.open());
+      renderer.apply(writer.region(REGION, { tag: 'article' }));
       const session: Session = {
         renderer,
+        writer,
         chunks: chunkSource(settings.source, settings.chunkMode),
         announce,
         index: 0,
-        seq: 2,
         finished: false,
       };
       sessionRef.current = session;
@@ -194,8 +196,8 @@ export function KitchenSinkTab(): JSX.Element {
     (session: Session): void => {
       session.finished = true;
       const done =
-        session.renderer.apply({ type: 'region-done', seq: session.seq++, id: REGION }) &&
-        session.renderer.apply({ type: 'doc-done', seq: session.seq++, id: DOC_ID });
+        session.renderer.apply(session.writer.done(REGION)) &&
+        session.renderer.apply(session.writer.close());
       syncView(session);
       if (done) {
         setStatus('done');
@@ -214,12 +216,7 @@ export function KitchenSinkTab(): JSX.Element {
         return false;
       }
       const text = chunk ?? session.chunks[session.index] ?? '';
-      const accepted = session.renderer.apply({
-        type: 'stream',
-        seq: session.seq++,
-        target: REGION,
-        chunk: text,
-      });
+      const accepted = session.renderer.apply(session.writer.stream(REGION, text));
       if (!accepted) {
         session.finished = true;
         syncView(session);

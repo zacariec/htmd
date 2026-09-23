@@ -1,5 +1,7 @@
 import { baseCatalog, createHost, requestHtmdHost } from '@htmdjs/contracts';
+import { streamText } from '@htmdjs/wire';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHtmdSource } from '../src/materialize.js';
 import { RegionTreeRenderer } from '../src/region-tree-renderer.js';
 import type { RenderLimits } from '../src/region-tree-renderer.js';
 import { RendererEvents } from '../src/renderer-events.js';
@@ -585,5 +587,28 @@ describe('render limits', () => {
 
     expect(target.regionElement('$.b')?.textContent).toBe('abcdefghi');
     expectClosedAfter(target, errors, '$.b', 3);
+  });
+});
+
+describe('streamText into a renderer', () => {
+  it('reaches doc-done with the same content as rendering the joined text', async () => {
+    const chunks = [
+      '# Q4\n\nRevenue grew **12',
+      '%**.\n\n<choice-group name="next">',
+      '<choice-item value="a">A</choice-item></choice-group>',
+    ];
+    const target = new RegionTreeRenderer(container());
+    const done = vi.fn();
+    target.addEventListener(RendererEvents.DocDone, done);
+    for await (const event of streamText(chunks, { region: '$.answer' })) {
+      expect(target.apply(event)).toBe(true);
+    }
+    const reference = container();
+    renderHtmdSource(reference, chunks.join(''));
+
+    expect(done).toHaveBeenCalledTimes(1);
+    expect(target.regionElement('$.answer')?.querySelector('[data-htmd-content]')?.innerHTML).toBe(
+      reference.innerHTML,
+    );
   });
 });

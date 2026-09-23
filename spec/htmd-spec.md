@@ -329,7 +329,7 @@ This repository.
 
 - [`@htmdjs/contracts`](../packages/contracts) — component contracts, catalogs, hosts, intents, payload schemas, and validation.
 - [`@htmdjs/parser`](../packages/parser) — parse source into AST, pending state, and diagnostics.
-- [`@htmdjs/wire`](../packages/wire) — event-shape validation.
+- [`@htmdjs/wire`](../packages/wire) — event-shape validation and producer helpers that number events and turn streamed text into a complete document.
 - [`@htmdjs/elements`](../packages/elements) — base component implementations.
 - [`@htmdjs/renderer`](../packages/renderer) — contract-enforcing, state-preserving DOM rendering and protocol lifecycle.
 - [`@htmdjs/react`](../packages/react) — static documents and stream lifecycle adapter.

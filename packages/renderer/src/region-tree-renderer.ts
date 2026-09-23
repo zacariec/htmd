@@ -1,7 +1,7 @@
 import { defaultHost, provideHtmdHost, resolveComponent } from '@htmdjs/contracts';
 import type { HtmdDiagnostic, HtmdHost } from '@htmdjs/contracts';
 import { DiagnosticSeverity, Parser, isCustomElementTag } from '@htmdjs/parser';
-import { safeParseWireEvent } from '@htmdjs/wire';
+import { SCHEMA_VERSION, safeParseWireEvent } from '@htmdjs/wire';
 import type {
   DocDoneEvent,
   DocOpenEvent,
@@ -228,8 +228,8 @@ export class RegionTreeRenderer extends EventTarget {
       return 'document is closed; reset before applying new events';
     }
     if (event.type === 'doc-open') {
-      if (event.schemaVersion !== '0.1') {
-        return `unsupported schema version "${event.schemaVersion}"; expected "0.1"`;
+      if (event.schemaVersion !== SCHEMA_VERSION) {
+        return `unsupported schema version "${event.schemaVersion}"; expected "${SCHEMA_VERSION}"`;
       }
       return this.lastSeq === -1
         ? undefined

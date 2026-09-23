@@ -18,8 +18,10 @@ Importing the meta package with the browser export condition registers the base 
 
 ## Stream into a document
 
+`streamText` turns streamed text, such as model output, into a complete wire document:
+
 ```ts
-import { RegionTreeRenderer, baseCatalog, createHost, registerHtmdElements } from '@htmdjs/core';
+import { RegionTreeRenderer, baseCatalog, createHost, registerHtmdElements, streamText } from '@htmdjs/core';
 
 registerHtmdElements();
 const host = createHost({ components: baseCatalog });
@@ -27,19 +29,38 @@ const container = document.querySelector('#answer');
 if (!container) throw new Error('Missing answer container');
 const renderer = new RegionTreeRenderer(container, { host });
 
-renderer.apply({ type: 'doc-open', seq: 0, id: 'answer', schemaVersion: '0.1' });
-renderer.apply({ type: 'region', seq: 1, id: '$.body', tag: 'section' });
-renderer.apply({ type: 'stream', seq: 2, target: '$.body', chunk: '# Results\n\n' });
-renderer.apply({
-  type: 'stream', seq: 3, target: '$.body',
-  chunk: '<choice-group name="next"><choice-item value="details">Show details</choice-item></choice-group>',
-});
-renderer.apply({ type: 'stream', seq: 4, target: '$.body', chunk: '\n\nMore prose can arrive without clearing the choice.' });
-renderer.apply({ type: 'region-done', seq: 5, id: '$.body' });
-renderer.apply({ type: 'doc-done', seq: 6, id: 'answer' });
+// modelTokens: any AsyncIterable<string> or Iterable<string>.
+for await (const event of streamText(modelTokens, { region: '$.answer' })) {
+  renderer.apply(event);
+}
 ```
 
-Producers send structured events over an ordered transport. A `ReadableStream<WireEvent>` is a stream of decoded events, not raw HTTP bytes; decode SSE/JSONL framing before passing a Fetch response stream to the adapter.
+It opens the document, declares the region, sends each non-empty chunk, then finalizes the region and closes the document. If the text source throws, it sends a fatal `error` event and rethrows. If the consumer stops early, the text source is closed too, so generation stops.
+
+To send events from a server, write one JSON event per SSE message; `useHtmdStream` accepts the `EventSource` directly:
+
+```ts
+for await (const event of streamText(modelTokens)) {
+  response.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+```
+
+For documents with several regions, `WireWriter` numbers events and validates region ids:
+
+```ts
+import { WireWriter } from '@htmdjs/core';
+
+const doc = new WireWriter('answer');
+send(doc.open());
+send(doc.region('$.summary'));
+send(doc.region('$.details', { tag: 'section' }));
+send(doc.stream('$.details', 'Loading the breakdown…'));
+send(doc.stream('$.summary', 'Revenue grew **12%**.'));
+send(doc.done('$.summary'));
+send(doc.close());
+```
+
+`close()` or a fatal `error()` ends the document; later calls throw. Producers send structured events over an ordered transport. A `ReadableStream<WireEvent>` is a stream of decoded events, not raw HTTP bytes; decode SSE/JSONL framing before passing a Fetch response stream to the adapter.
 
 ## The host decides
 
@@ -85,9 +106,9 @@ Producers can check a document before sending it with `validateNodes`, which app
 ## React
 
 ```tsx
-import { baseCatalog, createHost } from '@htmdjs/contracts';
+import { baseCatalog, createHost, streamText } from '@htmdjs/core';
 import { HtmdDoc, useHtmdStream } from '@htmdjs/react';
-import type { HtmdStreamSource } from '@htmdjs/react';
+import { useMemo } from 'react';
 
 const host = createHost({ components: baseCatalog });
 
@@ -95,13 +116,14 @@ export function StaticMessage() {
   return <HtmdDoc source={'# Hello\n\n**Markdown**, with optional components.'} host={host} />;
 }
 
-export function StreamedMessage({ source }: { source: HtmdStreamSource }) {
+export function StreamedMessage({ tokens }: { tokens: AsyncIterable<string> }) {
+  const source = useMemo(() => streamText(tokens), [tokens]);
   const { ref, status, error } = useHtmdStream(source, { host });
   return <section><div ref={ref} /><p>{status}{error ? `: ${error}` : ''}</p></section>;
 }
 ```
 
-Keep `source` and `host` stable across renders. Supported sources: synchronous/async iterables of events, `ReadableStream<WireEvent>`, and `EventSource`. `done` means an accepted `doc-done`, not simply EOF. An empty finite source stays `idle`; a nonempty truncated source becomes `error`.
+Keep `source` and `host` stable across renders (`useMemo` for `streamText`). Supported sources: synchronous/async iterables of events, `ReadableStream<WireEvent>`, and `EventSource`. `done` means an accepted `doc-done`, not simply EOF. An empty finite source stays `idle`; a nonempty truncated source becomes `error`. One-shot sources such as `streamText` work under React StrictMode.
 
 ## Packages
 
@@ -110,7 +132,7 @@ Keep `source` and `host` stable across renders. Supported sources: synchronous/a
 | [`@htmdjs/core`](./packages/htmd) | Meta package: contracts, parser, wire protocol, components, and renderer. |
 | [`@htmdjs/contracts`](./packages/contracts) | Component contracts, catalogs, host capabilities, intents, payload schemas, and validation. |
 | [`@htmdjs/parser`](./packages/parser) | Dependency-free source parser, streaming/pending state, diagnostics, and decoded attributes. |
-| [`@htmdjs/wire`](./packages/wire) | Zod-validated event shapes and JSON event parsing. |
+| [`@htmdjs/wire`](./packages/wire) | Zod-validated event shapes, JSON event parsing, and producer helpers (`streamText`, `WireWriter`). |
 | [`@htmdjs/elements`](./packages/elements) | Nine Lit components for choices, refinement, files, images, tables, code, messages, and structured fragments. |
 | [`@htmdjs/renderer`](./packages/renderer) | Contract-enforcing static rendering and state-preserving region streaming. |
 | [`@htmdjs/react`](./packages/react) | Static document component and stream lifecycle hook. |

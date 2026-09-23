@@ -114,10 +114,14 @@ export {
   RegionEvent,
   RegionId,
   RegionReplaceEvent,
+  SCHEMA_VERSION,
   safeParseWireEvent,
   StreamEvent,
+  streamText,
   WireEvent,
+  WireWriter,
 } from '@htmdjs/wire';
+export type { StreamTextOptions, WireErrorOptions, WireRegionOptions } from '@htmdjs/wire';
 
 export {
   applySafeAttrs,

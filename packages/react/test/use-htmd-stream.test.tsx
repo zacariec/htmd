@@ -1,6 +1,7 @@
 import { setHtmdElementsLogSink } from '@htmdjs/elements';
-import type { WireEvent } from '@htmdjs/wire';
+import { type WireEvent, streamText } from '@htmdjs/wire';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   type HtmdStreamSource,
@@ -95,6 +96,22 @@ describe('useHtmdStream', () => {
     }
 
     const { getByTestId } = render(<StreamHarness source={produce()} />);
+    await waitFor(() => expect(getByTestId('status').textContent).toBe('done'));
+    expect(getByTestId('host').querySelector('h1')?.textContent).toBe('hello');
+  });
+
+  it('renders a one-shot streamText source under StrictMode', async () => {
+    // StrictMode mounts effects twice; a generator can only be consumed once.
+    async function* tokens(): AsyncGenerator<string> {
+      yield '# hel';
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      yield 'lo';
+    }
+    const { getByTestId } = render(
+      <StrictMode>
+        <StreamHarness source={streamText(tokens())} />
+      </StrictMode>,
+    );
     await waitFor(() => expect(getByTestId('status').textContent).toBe('done'));
     expect(getByTestId('host').querySelector('h1')?.textContent).toBe('hello');
   });
